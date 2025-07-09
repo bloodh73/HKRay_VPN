@@ -1,0 +1,52 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Define the linear gradient for the background -->
+    <linearGradient id="backgroundGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2962FF;stop-opacity:1" /> <!-- Colors.blueAccent.shade700 -->
+      <stop offset="100%" style="stop-color:#42A5F5;stop-opacity:1" /> <!-- Colors.blueAccent.shade400 -->
+    </linearGradient>
+
+    <!-- Define the linear gradient for the "ray" -->
+    <linearGradient id="rayGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8C9EFF;stop-opacity:1" /> <!-- Lighter blue/purple -->
+      <stop offset="100%" style="stop-color:#651FFF;stop-opacity:1" /> <!-- Deeper purple -->
+    </linearGradient>
+
+    <!-- Filter for subtle shadow on the shield -->
+    <filter id="shieldShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feOffset result="offOut" in="SourceAlpha" dx="0" dy="8" />
+      <feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" />
+      <feBlend in="SourceGraphic" in2="blurOut" mode="normal" />
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+    </filter>
+
+    <!-- Filter for subtle glow on the ray -->
+    <filter id="rayGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+      <feOffset in="blur" dx="0" dy="0" result="offsetBlur" />
+      <feFlood flood-color="#8C9EFF" flood-opacity="0.7" result="floodColor" />
+      <feComposite in="floodColor" in2="offsetBlur" operator="in" result="comp" />
+      <feMerge>
+        <feMergeNode in="comp" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Main rounded square background -->
+  <rect x="0" y="0" width="256" height="256" rx="50" fill="url(#backgroundGradient)" />
+
+  <!-- The "Ray" element (behind the shield) -->
+  <path d="M 0 50 Q 128 0, 256 50 T 256 200 Q 128 256, 0 200 Z" fill="url(#rayGradient)" filter="url(#rayGlow)" opacity="0.8" transform="translate(0, 0) scale(0.8) rotate(10 128 128)" style="transform-origin: center;"/>
+
+  <!-- Shield/Lock Icon -->
+  <path d="M 128 30 C 100 30, 80 50, 80 78 L 80 128 C 80 156, 128 220, 128 220 C 128 220, 176 156, 176 128 L 176 78 C 176 50, 156 30, 128 30 Z"
+        fill="white" filter="url(#shieldShadow)" transform="translate(0, -10)"/>
+
+  <!-- Optional: A small lock keyhole or detail on the shield -->
+  <circle cx="128" cy="140" r="10" fill="#3F51B5"/>
+  <rect x="126" y="145" width="4" height="15" fill="#3F51B5"/>
+
+</svg>

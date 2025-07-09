@@ -1,0 +1,56 @@
+name: hkray_vpn
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_v2ray: ^1.0.10
+  http: ^1.2.1
+  shared_preferences: ^2.2.2
+  provider: ^6.1.1
+  flutter_secure_storage: ^9.0.2
+  intl: ^0.20.2
+  flutter_svg: ^2.0.10+1
+  flutter_switch: ^0.3.2
+  percent_indicator: ^4.2.3
+  flutter_spinkit: ^5.2.0
+  connectivity_plus: ^5.0.2
+  permission_handler: ^11.3.0
+  fluttertoast: ^8.2.4
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1 # اضافه شده برای فونت‌های زیبا
+  flutter_localizations:
+    sdk: flutter
+  shamsi_date: ^1.1.0
+  device_info_plus: ^11.5.0
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sql/
+    - assets/images/
+    - assets/fonts/
+    - .env
+  
+  fonts:
+    - family: Vazirmatn
+      fonts:
+        - asset: assets/fonts/Vazirmatn-Regular.ttf
+        - asset: assets/fonts/Vazirmatn-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Vazirmatn-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Vazirmatn-SemiBold.ttf
+          weight: 600
