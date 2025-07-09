@@ -5,15 +5,9 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'vpn_wrapper_screen.dart';
-import 'dart:io'; // For Platform.isAndroid, Platform.isIOS
-import 'package:device_info_plus/device_info_plus.dart'; // اضافه کردن این import
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 
-/// A screen that provides a login interface for users to authenticate.
-///
-/// This widget manages user input for username and password, and
-/// interacts with the authentication service to verify credentials.
-/// After successful login, the user is navigated to the main VPN
-/// wrapper screen.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -26,28 +20,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  final String _apiBaseUrl = 'https://blizzardping.ir/api.php'; // آدرس API شما
+  final String _apiBaseUrl = 'https://blizzardping.ir/api.php';
 
-  // Function to get the actual device name using device_info_plus
   Future<String> _getDeviceName() async {
     DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
     if (Platform.isAndroid) {
       AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-      return androidInfo.model; // مدل دستگاه اندروید
+      return "${androidInfo.manufacturer} ${androidInfo.model}";
     } else if (Platform.isIOS) {
       IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-      return iosInfo.name; // نام دستگاه iOS
-    } else if (Platform.isLinux) {
-      LinuxDeviceInfo linuxInfo = await deviceInfo.linuxInfo;
-      return linuxInfo.prettyName; // نام سیستم لینوکس
-    } else if (Platform.isMacOS) {
-      MacOsDeviceInfo macOsInfo = await deviceInfo.macOsInfo;
-      return macOsInfo.model; // مدل دستگاه مک
-    } else if (Platform.isWindows) {
-      WindowsDeviceInfo windowsInfo = await deviceInfo.windowsInfo;
-      return windowsInfo.computerName; // نام کامپیوتر ویندوز
+      return iosInfo.name;
     }
-    return 'Unknown Device'; // برای پلتفرم‌های دیگر
+    return "Unknown Device";
   }
 
   Future<void> _login() async {
@@ -55,93 +39,54 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    final username = _usernameController.text;
-    final password = _passwordController.text;
-    final deviceName = await _getDeviceName(); // دریافت نام واقعی دستگاه
-
-    if (username.isEmpty || password.isEmpty) {
-      _showSnackBar('لطفا نام کاربری و رمز عبور را وارد کنید.');
-      setState(() {
-        _isLoading = false;
-      });
-      return;
-    }
+    final String username = _usernameController.text;
+    final String password = _passwordController.text;
+    final String deviceName = await _getDeviceName();
 
     try {
-      final url = Uri.parse('$_apiBaseUrl?action=login');
       final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        Uri.parse('$_apiBaseUrl?action=login'),
         body: {
           'username': username,
           'password': password,
-          'device_name': deviceName, // ارسال نام واقعی دستگاه
+          'device_name': deviceName, // Send device name to API
         },
       );
 
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        if (responseData['success'] == true) {
-          final prefs = await SharedPreferences.getInstance();
-          final userId = responseData['user_id'];
-          final fetchedUsername = responseData['username'];
+      final responseData = json.decode(response.body);
 
-          await prefs.setInt('user_id', userId);
-          await prefs.setString('username', fetchedUsername);
+      if (responseData['success']) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('user_id', responseData['user_id']);
+        await prefs.setString('username', username);
 
-          // Get V2RayService instance
-          final v2rayService = Provider.of<V2RayService>(
-            context,
-            listen: false,
-          );
+        // Send login status with device name
+        await Provider.of<V2RayService>(
+          context,
+          listen: false,
+        ).sendLoginStatus(responseData['user_id'], true, deviceName);
 
-          // Send login status to server including device name
-          print(
-            'LoginScreen: Calling sendLoginStatus for user ID: $userId, isLoggedIn: true, deviceName: $deviceName',
-          );
-          await v2rayService.sendLoginStatus(
-            userId,
-            true,
-            deviceName,
-          ); // Pass deviceName
-
-          // Navigate to VPNWrapperScreen
-          // ignore: use_build_context_synchronously
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const VpnWrapperScreen()),
-          );
-        } else {
-          _showSnackBar(responseData['message'] ?? 'خطای ناشناخته در ورود.');
-        }
+        // ignore: use_build_context_synchronously
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const VpnWrapperScreen()),
+        );
       } else {
-        _showSnackBar('خطا در اتصال به سرور: ${response.statusCode}');
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(responseData['message'] ?? 'خطای ناشناخته')),
+        );
       }
     } catch (e) {
-      _showSnackBar('خطا در ورود: $e');
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('خطا در برقراری ارتباط: $e')));
     } finally {
       setState(() {
         _isLoading = false;
       });
     }
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontFamily: 'Vazirmatn'),
-        ),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(12),
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-        ),
-      ),
-    );
   }
 
   @override
@@ -154,79 +99,60 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blueAccent.shade700, Colors.blueAccent.shade400],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              // Logo/App Icon
+              Icon(
+                Icons.vpn_lock, // Or your app's specific icon
+                size: 100,
+                color: Theme.of(context).colorScheme.primary,
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset(
-                      'assets/images/logo.png', // مسیر لوگوی شما
-                      height: 120,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'ورود به حساب کاربری',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blueAccent.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    TextField(
-                      controller: _usernameController,
-                      decoration: const InputDecoration(
-                        labelText: 'نام کاربری',
-                        prefixIcon: Icon(
-                          Icons.person,
-                          color: Colors.blueAccent,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'رمز عبور',
-                        prefixIcon: Icon(Icons.lock, color: Colors.blueAccent),
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    _isLoading
-                        ? const CircularProgressIndicator(
-                            color: Colors.blueAccent,
-                          )
-                        : SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _login,
-                              child: const Text(
-                                'ورود',
-                                style: TextStyle(fontSize: 18),
-                              ),
-                            ),
-                          ),
-                  ],
+              const SizedBox(height: 24),
+              Text(
+                'به HKRay VPN خوش آمدید',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onBackground,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
+              const SizedBox(height: 32),
+              TextField(
+                controller: _usernameController,
+                decoration: const InputDecoration(
+                  labelText: 'نام کاربری',
+                  hintText: 'نام کاربری خود را وارد کنید',
+                  prefixIcon: Icon(Icons.person),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'رمز عبور',
+                  hintText: 'رمز عبور خود را وارد کنید',
+                  prefixIcon: Icon(Icons.lock),
+                ),
+              ),
+              const SizedBox(height: 32),
+              _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    )
+                  : ElevatedButton(
+                      onPressed: _login,
+                      child: const Text('ورود'),
+                    ),
+              const SizedBox(height: 20), // Added spacing
+            ],
           ),
         ),
       ),
