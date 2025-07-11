@@ -209,6 +209,44 @@ switch ($action) {
         $stmt->close();
         break;
 
+    case 'getLoggedInDevices': // Added this case to handle the request
+        $userId = $_GET['user_id'] ?? null;
+        $username = $_GET['username'] ?? null; // Assuming username is also passed
+
+        if (empty($userId) || empty($username)) {
+            echo json_encode(["success" => false, "message" => "User ID and username are required."]);
+            break;
+        }
+
+        // Fetch login status from the 'users' table
+        $stmt = $conn->prepare("SELECT is_logged_in, last_login FROM users WHERE id = ? AND username = ?");
+        $stmt->bind_param("is", $userId, $username);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            // Return the login status of the user.
+            // Note: This assumes one login status per user, not multiple devices.
+            // If you need multi-device tracking, a separate table (like 'logged_in_devices')
+            // with a device identifier would be necessary.
+            echo json_encode([
+                "success" => true,
+                "message" => "Login status fetched successfully.",
+                "devices" => [ // Returning as an array to match previous structure if needed
+                    [
+                        "is_logged_in" => (bool)$row['is_logged_in'],
+                        "last_login" => $row['last_login'],
+                        "device_name" => "Main Device" // Placeholder, as device_name is not in 'users' table
+                    ]
+                ]
+            ]);
+        } else {
+            echo json_encode(["success" => false, "message" => "User not found or no login status available."]);
+        }
+        $stmt->close();
+        break;
+
     default:
         echo json_encode(["success" => false, "message" => "عملیات نامعتبر."]);
         break;

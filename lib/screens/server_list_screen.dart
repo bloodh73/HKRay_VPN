@@ -1,8 +1,8 @@
-// server_list_screen.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/v2ray_config.dart';
-import 'dart:io'; // برای Socket.connect جهت اندازه‌گیری پینگ TCP
-import 'dart:async'; // برای TimeoutException
+import '../services/v2ray_service.dart';
+import 'dart:async';
 
 class ServerListScreen extends StatefulWidget {
   final List<V2RayConfig> configs;
@@ -20,118 +20,95 @@ class ServerListScreen extends StatefulWidget {
 
 class _ServerListScreenState extends State<ServerListScreen> {
   V2RayConfig? _selectedConfig;
+  late List<V2RayConfig> _configs; // Use a state variable for sorting
   final Map<String, int?> _serverPings = {};
   final Map<String, bool> _isPingingServer = {};
-  // اضافه شدن نقشه برای ذخیره زمان آخرین تلاش پینگ
-  final Map<String, DateTime> _lastPingAttemptTime = {};
-  // مدت زمان وقفه برای پینگ‌های ناموفق
-  static const Duration _pingCooldownDuration = Duration(minutes: 5);
+  bool _isSortingAndPinging = false; // To show a global loading indicator
 
   @override
   void initState() {
     super.initState();
     _selectedConfig = widget.currentSelectedConfig;
+    _configs = List.from(widget.configs); // Initialize the state list
 
-    _pingAllServers();
-
-    print('ServerListScreen - Received ${widget.configs.length} configs');
-    widget.configs.asMap().forEach((index, config) {
-      print(
-        'Server $index: ${config.name} - ${config.server}:${config.port}', // Changed to config.name
-      );
-    });
+    for (var config in _configs) {
+      _serverPings[config.id] = 0; // 0 means not tested yet
+    }
   }
 
-  Future<void> _pingAllServers() async {
-    for (var config in widget.configs) {
-      // بررسی می‌کنیم که آیا سرور در حال پینگ شدن است یا خیر
-      // و همچنین آیا باید پینگ شود (بر اساس مکانیزم Cooldown برای پینگ‌های ناموفق)
-      if (!_isPingingServer.containsKey(config.id) ||
-          !_isPingingServer[config.id]!) {
-        // بررسی وضعیت پینگ قبلی و زمان آخرین تلاش
-        final currentPingResult = _serverPings[config.id];
-        final lastAttempt = _lastPingAttemptTime[config.id];
+  /// Pings a single server and updates its status.
+  Future<void> _realPingServer(V2RayConfig config) async {
+    if (_isPingingServer[config.id] == true) return;
 
-        // اگر پینگ قبلی ناموفق بوده و هنوز در دوره Cooldown هستیم، پینگ را رد می‌کنیم
-        if (currentPingResult != null &&
-            (currentPingResult == -1 ||
-                currentPingResult == -2 ||
-                currentPingResult == -3) &&
-            lastAttempt != null &&
-            DateTime.now().difference(lastAttempt) < _pingCooldownDuration) {
-          print(
-            'Skipping ping for ${config.name} (${config.id}) due to cooldown after recent failure.',
-          );
-          continue; // به سرور بعدی می‌رویم
-        }
-        _pingServer(config);
+    setState(() {
+      _isPingingServer[config.id] = true;
+      _serverPings[config.id] = null; // Show loading
+    });
+
+    try {
+      final v2rayService = Provider.of<V2RayService>(context, listen: false);
+      final int pingResult = await v2rayService.getRealPing(config);
+      if (mounted) {
+        setState(() => _serverPings[config.id] = pingResult);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _serverPings[config.id] = -1);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPingingServer[config.id] = false);
       }
     }
   }
 
-  Future<void> _pingServer(V2RayConfig config) async {
-    if (_isPingingServer[config.id] == true)
-      return; // اگر در حال پینگ شدن است، کاری نمی‌کنیم
+  /// Pings all servers, then sorts the list based on the results.
+  Future<void> _pingAndSortServers() async {
+    setState(() => _isSortingAndPinging = true);
 
-    setState(() {
-      _isPingingServer[config.id] = true;
-      _serverPings[config.id] = null; // پاک کردن پینگ قبلی
+    // Create a list of futures to ping all servers concurrently.
+    final List<Future<void>> pingFutures = [];
+    for (var config in _configs) {
+      pingFutures.add(_realPingServer(config));
+    }
+    await Future.wait(pingFutures); // Wait for all pings to complete
+
+    // Sort the list based on ping results
+    _configs.sort((a, b) {
+      final pingA = _serverPings[a.id] ?? 0;
+      final pingB = _serverPings[b.id] ?? 0;
+
+      final isAValid = pingA > 0;
+      final isBValid = pingB > 0;
+
+      if (isAValid && isBValid) {
+        return pingA.compareTo(pingB); // Both valid, sort by ping
+      } else if (isAValid) {
+        return -1; // A is valid, B is not, so A comes first
+      } else if (isBValid) {
+        return 1; // B is valid, A is not, so B comes first
+      } else {
+        // Both are invalid (error or untested), sort errors to the bottom
+        // A higher negative number (e.g., -1) is "better" than a lower one (-2)
+        return pingB.compareTo(pingA);
+      }
     });
 
-    try {
-      final host = config.server;
-      final port = config.port;
-      final startTime = DateTime.now();
-
-      // تلاش برای اتصال به هاست و پورت سرور
-      // استفاده از تایم اوت برای جلوگیری از انتظار نامحدود
-      await Socket.connect(host, port, timeout: const Duration(seconds: 5));
-
-      final endTime = DateTime.now();
-      final pingTime = endTime.difference(startTime).inMilliseconds;
-
-      setState(() {
-        _serverPings[config.id] = pingTime;
-      });
-    } on SocketException catch (e) {
-      print('Ping failed for ${config.server}:${config.port}: $e');
-      setState(() {
-        _serverPings[config.id] = -1; // نشان دهنده خطا
-      });
-    } on TimeoutException {
-      print('Ping timed out for ${config.server}:${config.port}');
-      setState(() {
-        _serverPings[config.id] = -2; // نشان دهنده تایم اوت
-      });
-    } catch (e) {
-      print(
-        'An unexpected error occurred during ping for ${config.server}:${config.port}: $e',
-      );
-      setState(() {
-        _serverPings[config.id] = -3; // نشان دهنده خطای دیگر
-      });
-    } finally {
-      setState(() {
-        _isPingingServer[config.id] = false;
-        _lastPingAttemptTime[config.id] =
-            DateTime.now(); // ذخیره زمان آخرین تلاش پینگ
-      });
-    }
+    setState(() => _isSortingAndPinging = false);
   }
 
   String _getPingText(int? ping) {
-    if (ping == null) return 'در حال پینگ...';
-    if (ping == -1) return 'خطا';
-    if (ping == -2) return 'تایم اوت';
-    if (ping == -3) return 'خطای ناشناخته';
+    if (ping == null) return '...';
+    if (ping == 0) return 'تست';
+    if (ping < 0) return 'خطا';
     return '$ping ms';
   }
 
   Color _getPingColor(int? ping) {
-    if (ping == null) return Colors.grey;
-    if (ping == -1 || ping == -2 || ping == -3) return Colors.red;
-    if (ping < 100) return Colors.green;
-    if (ping < 200) return Colors.orange;
+    if (ping == null || ping == 0) return Colors.grey;
+    if (ping < 0) return Colors.red;
+    if (ping < 1800) return Colors.green;
+    if (ping < 1900) return Colors.orange;
     return Colors.red;
   }
 
@@ -159,169 +136,184 @@ class _ServerListScreenState extends State<ServerListScreen> {
             Navigator.pop(context, _selectedConfig);
           },
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: () {
-              // وقتی دکمه رفرش فشار داده می‌شود، همه سرورها را بدون توجه به Cooldown پینگ می‌کنیم
-              _serverPings.clear(); // پاک کردن نتایج پینگ قبلی
-              _lastPingAttemptTime.clear(); // پاک کردن زمان آخرین تلاش
-              _pingAllServers(); // فراخوانی مجدد پینگ برای همه
-            },
-            tooltip: 'پینگ مجدد همه سرورها',
-          ),
-        ],
+        // Removed the sort button from the AppBar
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.blue.shade100],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: widget.configs.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.sentiment_dissatisfied,
-                      size: 80,
-                      color: Colors.grey.shade600,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'هیچ سروری برای نمایش وجود ندارد.',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        // Optionally, navigate back or refresh the main screen
-                        Navigator.pop(context); // Go back to HomeScreen
-                      },
-                      icon: const Icon(Icons.arrow_back),
-                      label: const Text('بازگشت'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            : ListView.builder(
-                itemCount: widget.configs.length,
-                itemBuilder: (context, index) {
-                  final config = widget.configs[index];
-                  final isSelected = _selectedConfig?.id == config.id;
-                  final serverPing = _serverPings[config.id];
-                  final isPinging = _isPingingServer[config.id] == true;
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade50, Colors.blue.shade100],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Column(
+              // Added Column to hold the button and the list
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.07,
+                    width: MediaQuery.of(context).size.height,
 
-                  return Card(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    elevation: 5,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                      side: isSelected
-                          ? BorderSide(
-                              color: Theme.of(context).colorScheme.secondary,
-                              width: 2,
-                            )
-                          : BorderSide.none,
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
+                    child: ElevatedButton.icon(
+                      onPressed: _isSortingAndPinging
+                          ? null
+                          : _pingAndSortServers,
+                      icon: const Icon(Icons.sort, size: 24),
+                      label: Text(
+                        _isSortingAndPinging
+                            ? 'در حال تست و مرتب‌سازی...'
+                            : 'تست و مرتب‌سازی سرورها',
+                        style: const TextStyle(fontSize: 18),
                       ),
-                      leading: Icon(
-                        Icons.vpn_lock,
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.secondary
-                            : Colors.blueGrey,
-                        size: 30,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        elevation: 5,
                       ),
-                      title: Text(
-                        // نمایش فیلد 'name' که اکنون دارای fallback است
-                        config.name,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: isSelected
-                                  ? Colors.blueAccent.shade700
-                                  : Colors.black87,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  // Expanded to make the ListView take available space
+                  child: _configs.isEmpty
+                      ? Center(
+                          child: Text(
+                            'هیچ سروری برای نمایش وجود ندارد.',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey.shade700,
                             ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text(
-                            '${config.protocol?.toUpperCase() ?? 'نامشخص'} - ${config.server}:${config.port}',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: Colors.grey.shade600),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.network_check,
-                                size: 16,
-                                color: _getPingColor(serverPing),
+                        )
+                      : ListView.builder(
+                          itemCount: _configs.length,
+                          itemBuilder: (context, index) {
+                            final config = _configs[index];
+                            final isSelected = _selectedConfig?.id == config.id;
+                            final serverPing = _serverPings[config.id];
+                            final isPinging =
+                                _isPingingServer[config.id] == true;
+
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
                               ),
-                              const SizedBox(width: 4),
-                              if (isPinging)
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Theme.of(context).colorScheme.secondary,
-                                    ),
-                                  ),
-                                )
-                              else
-                                Text(
-                                  'پینگ: ${_getPingText(serverPing)}',
-                                  style: Theme.of(context).textTheme.bodySmall
+                              elevation: 5,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                                side: isSelected
+                                    ? BorderSide(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.secondary,
+                                        width: 2.5,
+                                      )
+                                    : BorderSide.none,
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                leading: Icon(
+                                  Icons.vpn_lock,
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.secondary
+                                      : Colors.blueGrey,
+                                  size: 30,
+                                ),
+                                title: Text(
+                                  config.name,
+                                  style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(
-                                        color: _getPingColor(serverPing),
+                                        fontWeight: FontWeight.bold,
+                                        color: isSelected
+                                            ? Colors.blueAccent.shade700
+                                            : Colors.black87,
                                       ),
                                 ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      trailing: isSelected
-                          ? Icon(
-                              Icons.check_circle,
-                              color: Theme.of(context).colorScheme.secondary,
-                              size: 30,
-                            )
-                          : null,
-                      onTap: () {
-                        setState(() {
-                          _selectedConfig = config;
-                        });
-                      },
+                                subtitle: Text(
+                                  '${config.protocol?.toUpperCase() ?? 'نامشخص'} - ${config.server}:${config.port}',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: Colors.grey.shade600),
+                                ),
+                                trailing: SizedBox(
+                                  width: 100,
+                                  child: isPinging
+                                      ? const Center(
+                                          child: SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                            ),
+                                          ),
+                                        )
+                                      : TextButton.icon(
+                                          onPressed: () =>
+                                              _realPingServer(config),
+                                          icon: Icon(
+                                            Icons.network_ping,
+                                            size: 20,
+                                            color: _getPingColor(serverPing),
+                                          ),
+                                          label: Text(
+                                            _getPingText(serverPing),
+                                            style: TextStyle(
+                                              color: _getPingColor(serverPing),
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          style: TextButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                                onTap: () {
+                                  setState(() => _selectedConfig = config);
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          if (_isSortingAndPinging)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: const Center(
+                child: Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text("در حال تست و مرتب‌سازی سرورها..."),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
+            ),
+        ],
       ),
     );
   }

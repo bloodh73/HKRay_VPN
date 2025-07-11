@@ -12,6 +12,8 @@ import 'login_screen.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import 'package:package_info_plus/package_info_plus.dart'; // Import for package info
 import 'package:url_launcher/url_launcher.dart'; // Import for launching URLs
+import 'dart:io'; // Required for DeviceInfoPlugin
+import 'package:device_info_plus/device_info_plus.dart'; // Required for DeviceInfoPlugin
 
 class HomeScreen extends StatefulWidget {
   final List<V2RayConfig> configs;
@@ -41,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _userStatus;
   List<Map<String, dynamic>> _loggedInDevices =
       []; // لیست جدید برای نگهداری دستگاه‌های وارد شده
-  // ignore: unused_field
   String? _errorMessage; // For displaying API fetch errors
 
   String _currentAppVersion = '1.0.1'; // Default version, will be updated
@@ -87,17 +88,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _deviceListUpdateTimer = Timer.periodic(
       const Duration(minutes: 5), // هر 5 دقیقه لیست دستگاه‌ها را به‌روز کن
       (timer) async {
-        final prefs = await SharedPreferences.getInstance();
-        final userId = prefs.getInt('user_id');
-        if (userId != null) {
-          _fetchLoggedInDevices(userId); // Pass userId to the method
+        // Pass username instead of userId
+        if (_username.isNotEmpty) {
+          _fetchLoggedInDevices(_username); // Pass username to the method
         }
       },
     );
 
     _fetchUserDetails(); // Initial fetch
 
-    // Initial fetch for devices, get userId first
+    // Initial fetch for devices, get username first
     _getInitialLoggedInDevices();
 
     // Get current app version
@@ -249,15 +249,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // New method to handle initial fetch of logged-in devices with userId
+  // New method to handle initial fetch of logged-in devices with username
   Future<void> _getInitialLoggedInDevices() async {
     final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getInt('user_id');
-    if (userId != null) {
-      _fetchLoggedInDevices(userId); // Pass userId to the method
+    final username = prefs.getString('username');
+    if (username != null && username.isNotEmpty) {
+      _fetchLoggedInDevices(username); // Pass username to the method
     } else {
       print(
-        'HomeScreen: User ID not found for initial logged-in devices fetch.',
+        'HomeScreen: Username not found for initial logged-in devices fetch.',
       );
     }
   }
@@ -278,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (userId == null) {
       setState(() {
-        _errorMessage = 'User not logged in. Please log in again.';
+        _errorMessage = 'کاربر وارد نشده است. لطفا دوباره وارد شوید.';
       });
       return;
     }
@@ -322,27 +322,27 @@ class _HomeScreenState extends State<HomeScreen> {
         } else {
           setState(() {
             _errorMessage =
-                responseData['message'] ?? 'Failed to fetch user info.';
+                responseData['message'] ?? 'خطا در واکشی اطلاعات کاربر.';
           });
         }
       } else {
         setState(() {
-          _errorMessage = 'Server error: ${response.statusCode}';
+          _errorMessage = 'خطای سرور: ${response.statusCode}';
         });
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Error fetching user details: $e';
+        _errorMessage = 'خطا در واکشی اطلاعات کاربر: $e';
       });
     }
   }
 
   // متد جدید برای واکشی لیست دستگاه‌های وارد شده
-  // این متد اکنون userId را به عنوان پارامتر دریافت می‌کند
-  Future<void> _fetchLoggedInDevices(int userId) async {
+  // این متد اکنون username را به عنوان پارامتر دریافت می‌کند
+  Future<void> _fetchLoggedInDevices(String username) async {
     try {
-      // Pass the current user's ID to fetchLoggedInDevices
-      final devices = await _v2rayService.fetchLoggedInDevices(userId);
+      // Pass the current user's username to fetchLoggedInDevices
+      final devices = await _v2rayService.fetchLoggedInDevices(username);
       setState(() {
         _loggedInDevices = devices;
       });
@@ -429,10 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _selectServer() async {
-    print('HomeScreen: _selectServer method called.'); // لاگ جدید
-    // Check connection status first
     if (_v2rayService.isConnected) {
-      // If connected, show a SnackBar and exit the method
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -448,60 +445,57 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       );
-      return; // Prevent further code execution
+      return;
     }
 
-    // Show loading indicator
+    // [MODIFIED] Show a more descriptive loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return const Center(child: CircularProgressIndicator());
+        return const PopScope(
+          canPop: false,
+          child: Center(
+            child: Card(
+              color: Colors.white,
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 20),
+                    Text(
+                      "در حال دریافت سرورها...",
+                      style: TextStyle(fontFamily: 'Vazirmatn'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
       },
     );
 
     try {
-      // Fetch the latest server list from API
-      final url = Uri.parse(
-        '$_apiBaseUrl?action=getSubscription',
-      ); // Changed action to getSubscription
-      print('HomeScreen: Fetching server list from API: $url'); // لاگ جدید
+      final url = Uri.parse('$_apiBaseUrl?action=getSubscription');
       final response = await http.get(url);
 
+      if (!mounted) return; // Check if the widget is still in the tree
       Navigator.pop(context); // Close loading dialog
-
-      print(
-        'HomeScreen: API response status for server list: ${response.statusCode}',
-      ); // لاگ جدید
-      print(
-        'HomeScreen: API response body for server list: ${response.body}',
-      ); // لاگ جدید
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
         if (responseData['success'] == true) {
-          final List<dynamic> shareLinks =
-              responseData['share_links'] ?? []; // Expecting 'share_links'
-          print(
-            'HomeScreen: Received ${shareLinks.length} share links for server list.',
-          ); // لاگ جدید
+          final List<dynamic> shareLinks = responseData['share_links'] ?? [];
           final List<V2RayConfig> updatedConfigs = [];
 
-          // Re-use the parsing logic from VpnWrapperScreen
           for (var link in shareLinks) {
             String linkString = link.toString().trim();
             if (linkString.startsWith('http://') ||
                 linkString.startsWith('https://')) {
               try {
-                // Assuming _fetchAndParseSubscriptionUrl is accessible or re-implement here
-                // For simplicity, let's re-implement the logic needed for subscription URLs here
-                // Or, better, refactor VpnWrapperScreen's parsing logic into V2RayService
-                // For now, I'll put a placeholder and suggest refactoring.
-                print(
-                  'HomeScreen: Encountered subscription URL in _selectServer: $linkString. This needs proper handling.',
-                );
-                // Placeholder: In a real app, you'd call a shared parsing method here.
-                // For this example, we'll just try to parse it as a direct link, which might fail.
                 final subscriptionResponse = await http.get(
                   Uri.parse(linkString),
                 );
@@ -512,14 +506,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   String decodedContent;
                   try {
                     decodedContent = utf8.decode(base64.decode(base64Content));
-                    print(
-                      'HomeScreen: Successfully decoded Base64 content from subscription URL.',
-                    );
                   } catch (e) {
-                    print(
-                      'HomeScreen: Error decoding Base64 content from subscription URL: $e',
-                    );
-                    decodedContent = base64Content; // Fallback if not Base64
+                    decodedContent = base64Content;
                   }
                   final lines = LineSplitter.split(decodedContent);
                   for (var subLine in lines) {
@@ -533,62 +521,30 @@ class _HomeScreenState extends State<HomeScreen> {
                           updatedConfigs.add(
                             V2RayConfig.fromV2RayURL(parsedSubResult),
                           );
-                          print(
-                            'HomeScreen: Added config from subscription: ${parsedSubResult.remark}',
-                          );
-                        } else {
-                          print(
-                            'HomeScreen: Failed to parse sub-link "$trimmedSubLine": ${parsedSubResult.toString()}',
-                          );
                         }
                       } catch (e) {
-                        print(
-                          'HomeScreen: Error parsing sub-link "$trimmedSubLine": $e',
-                        );
+                        print('Error parsing sub-link "$trimmedSubLine": $e');
                       }
                     }
                   }
-                } else {
-                  print(
-                    'HomeScreen: Failed to fetch subscription content from $linkString: ${subscriptionResponse.statusCode}',
-                  );
                 }
               } catch (e) {
-                print(
-                  'HomeScreen: Error fetching or parsing subscription URL $linkString: $e',
-                );
+                print('Error fetching subscription URL $linkString: $e');
               }
             } else {
-              // Direct V2Ray link
               try {
                 dynamic parsedResult = FlutterV2ray.parseFromURL(linkString);
-
                 if (parsedResult is V2RayURL) {
                   updatedConfigs.add(V2RayConfig.fromV2RayURL(parsedResult));
-                  print(
-                    'HomeScreen: Added direct config: ${parsedResult.remark}',
-                  ); // لاگ جدید
-                } else {
-                  String errorMessage =
-                      'Unexpected result from parser for link "$linkString": ${parsedResult.toString()}';
-                  print(
-                    'HomeScreen: Error parsing share link: $errorMessage',
-                  ); // لاگ جدید
                 }
               } catch (e) {
-                print(
-                  'HomeScreen: Error parsing direct share link $linkString: $e',
-                ); // لاگ جدید
+                print('Error parsing direct share link $linkString: $e');
               }
             }
           }
 
-          print(
-            'HomeScreen: Total updatedConfigs count: ${updatedConfigs.length}',
-          ); // لاگ جدید
-
+          if (!mounted) return;
           if (updatedConfigs.isNotEmpty) {
-            // Show server list with updated configs
             final selected = await Navigator.push<V2RayConfig?>(
               context,
               MaterialPageRoute(
@@ -603,8 +559,6 @@ class _HomeScreenState extends State<HomeScreen> {
               setState(() {
                 _selectedConfig = selected;
               });
-
-              // Update the widget's configs for future use
               widget.configs.clear();
               widget.configs.addAll(updatedConfigs);
             }
@@ -617,16 +571,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(fontFamily: 'Vazirmatn'),
                 ),
                 backgroundColor: Colors.orangeAccent,
-                behavior: SnackBarBehavior.floating,
-                margin: EdgeInsets.all(12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10)),
-                ),
               ),
             );
           }
         } else {
-          // Show error if server list couldn't be fetched
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -635,16 +583,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: const TextStyle(fontFamily: 'Vazirmatn'),
               ),
               backgroundColor: Colors.redAccent,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(12),
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(10)),
-              ),
             ),
           );
         }
       } else {
-        // Show network error
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -653,32 +595,23 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(fontFamily: 'Vazirmatn'),
             ),
             backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(12),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(10)),
-            ),
           ),
         );
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog in case of error
-      print('HomeScreen: Error in _selectServer: $e'); // لاگ جدید
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'خطا در دریافت اطلاعات سرورها: ${e.toString()}', // Display the actual error
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontFamily: 'Vazirmatn'),
+      if (mounted) {
+        Navigator.pop(context); // Close dialog on error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'خطا: ${e.toString()}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Vazirmatn'),
+            ),
+            backgroundColor: Colors.redAccent,
           ),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(12),
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
-          ),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -806,196 +739,11 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildDrawerItem(
                 icon: Icons.devices,
                 title: 'دستگاه‌های وارد شده',
-                onTap: () {
-                  // مطمئن می‌شویم که userId موجود است قبل از فراخوانی
-                  final currentUserId = SharedPreferences.getInstance().then((
-                    prefs,
-                  ) {
-                    return prefs.getInt('user_id');
-                  });
-
-                  showDialog(
-                    context: context,
-                    builder: (BuildContext context) {
-                      return AlertDialog(
-                        // Enhanced AlertDialog styling
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        backgroundColor: Colors.white,
-                        title: Row(
-                          children: [
-                            Icon(
-                              Icons.devices,
-                              color: Colors.blueAccent.shade700,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'دستگاه‌های وارد شده',
-                              style: TextStyle(
-                                color: Colors.blueAccent.shade700,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        content: FutureBuilder<int?>(
-                          future: currentUserId,
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const SizedBox(
-                                height: 100, // Give some height for loading
-                                child: Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              );
-                            } else if (snapshot.hasError ||
-                                snapshot.data == null) {
-                              return const Text(
-                                'خطا در دریافت شناسه کاربر.',
-                                style: TextStyle(color: Colors.red),
-                              );
-                            } else {
-                              final userId = snapshot.data!;
-                              // فراخوانی _fetchLoggedInDevices با userId
-                              _fetchLoggedInDevices(userId);
-                              return _loggedInDevices.isEmpty
-                                  ? const Text(
-                                      'هیچ دستگاهی یافت نشد.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.grey),
-                                    )
-                                  : SingleChildScrollView(
-                                      child: ListBody(
-                                        children: _loggedInDevices.map((
-                                          device,
-                                        ) {
-                                          final deviceName =
-                                              device['device_name'] ?? 'نامشخص';
-                                          final username =
-                                              device['username'] ?? 'نامشخص';
-                                          final lastLoginGregorian =
-                                              device['last_login'] ?? 'نامشخص';
-
-                                          String lastLoginShamsi = 'نامشخص';
-                                          try {
-                                            final gregorianDate =
-                                                DateTime.parse(
-                                                  lastLoginGregorian,
-                                                );
-                                            final jalaliDate =
-                                                Jalali.fromDateTime(
-                                                  gregorianDate,
-                                                );
-                                            final formatter =
-                                                jalaliDate.formatter;
-                                            lastLoginShamsi =
-                                                '${formatter.yyyy}/${formatter.mm}/${formatter.dd} ${formatter.yy}:${formatter.yy}:${formatter.yy}';
-                                          } catch (e) {
-                                            // Fallback if parsing fails
-                                            lastLoginShamsi =
-                                                lastLoginGregorian;
-                                          }
-
-                                          return Card(
-                                            elevation: 2,
-                                            margin: const EdgeInsets.symmetric(
-                                              vertical: 6.0,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(
-                                                12.0,
-                                              ),
-                                              child: Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Icon(
-                                                    _getDeviceIcon(deviceName),
-                                                    color: Colors.blueAccent,
-                                                    size: 28,
-                                                  ),
-                                                  const SizedBox(width: 12),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          'دستگاه: $deviceName',
-                                                          style:
-                                                              const TextStyle(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                fontSize: 16,
-                                                                color: Colors
-                                                                    .black87,
-                                                              ),
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 4,
-                                                        ),
-                                                        Text(
-                                                          'کاربر: $username',
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 14,
-                                                                color: Colors
-                                                                    .black54,
-                                                              ),
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 4,
-                                                        ),
-                                                        Text(
-                                                          'آخرین ورود: $lastLoginShamsi', // Display Shamsi date
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 12,
-                                                                color: Colors
-                                                                    .black45,
-                                                              ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        }).toList(),
-                                      ),
-                                    );
-                            }
-                          },
-                        ),
-                        actions: <Widget>[
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.blueAccent.shade700,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Text(
-                              'بستن',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                          ),
-                        ],
-                      );
-                    },
-                  );
+                onTap: () async {
+                  if (_username.isNotEmpty) {
+                    await _fetchLoggedInDevices(_username); // Fetch latest data
+                  }
+                  _showLoggedInDevicesDialog(); // Show dialog with current data
                 },
               ),
               _buildDrawerItem(
@@ -1009,10 +757,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: 'به‌روزرسانی اطلاعات',
                 onTap: () async {
                   _fetchUserDetails();
-                  final prefs = await SharedPreferences.getInstance();
-                  final userId = prefs.getInt('user_id');
-                  if (userId != null) {
-                    _fetchLoggedInDevices(userId); // Pass userId to the method
+                  if (_username.isNotEmpty) {
+                    _fetchLoggedInDevices(
+                      _username,
+                    ); // Pass username to the method
                   }
                 },
               ),
@@ -1047,8 +795,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     return AnimatedContainer(
                       duration: const Duration(milliseconds: 400),
                       curve: Curves.easeInOut,
-                      width: 220,
-                      height: 220,
+                      width: 150,
+                      height: 150,
                       margin: const EdgeInsets.symmetric(vertical: 20),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -1085,7 +833,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ? Icons.vpn_key
                                 : Icons.vpn_key_off,
                             color: Colors.white,
-                            size: 90,
+                            size: 50,
                           ),
                           const SizedBox(height: 15),
                           Text(
@@ -1096,7 +844,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 : 'قطع',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 26,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1284,81 +1032,60 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Logout Button
-              // SizedBox(
-              //   width: double.infinity,
-              //   child: ElevatedButton.icon(
-              //     onPressed: _logout,
-              //     icon: const Icon(Icons.logout, size: 24),
-              //     label: const Text(
-              //       'خروج از حساب',
-              //       style: TextStyle(fontSize: 18),
-              //     ),
-              //     style: ElevatedButton.styleFrom(
-              //       padding: const EdgeInsets.symmetric(vertical: 15),
-              //       shape: RoundedRectangleBorder(
-              //         borderRadius: BorderRadius.circular(15),
-              //       ),
-              //       backgroundColor: Colors.redAccent,
-              //       foregroundColor: Colors.white,
-              //       elevation: 5,
+              // User Info Card
+              // Card(
+              //   elevation: 8,
+              //   shape: RoundedRectangleBorder(
+              //     borderRadius: BorderRadius.circular(25),
+              //   ),
+              //   margin: const EdgeInsets.only(bottom: 20),
+              //   child: Padding(
+              //     padding: const EdgeInsets.all(20.0),
+              //     child: Column(
+              //       children: [
+              //         CircleAvatar(
+              //           radius: 40,
+              //           backgroundColor: Colors.blueAccent.shade100,
+              //           child: Icon(
+              //             Icons.person,
+              //             size: 50,
+              //             color: Colors.blueAccent.shade700,
+              //           ),
+              //         ),
+              //         const SizedBox(height: 15),
+              //         Text(
+              //           _username,
+              //           style: TextStyle(
+              //             fontSize: 22,
+              //             fontWeight: FontWeight.bold,
+              //             color: Colors.blueAccent.shade700,
+              //           ),
+              //         ),
+              //         const SizedBox(height: 5),
+              //         Text(
+              //           _userStatus ?? 'وضعیت نامشخص',
+              //           style: TextStyle(
+              //             fontSize: 16,
+              //             color: Colors.grey.shade700,
+              //           ),
+              //         ),
+              //         const Divider(height: 25, thickness: 1),
+              //         _buildInfoRow(
+              //           'تاریخ انقضا:',
+              //           _expiryDate ?? 'نامشخص',
+              //           icon: Icons.calendar_today,
+              //           iconColor: Colors.orange.shade700,
+              //         ),
+              //         _buildInfoRow(
+              //           'روزهای باقی مانده:',
+              //           '$_remainingDays روز',
+              //           icon: Icons.hourglass_empty,
+              //           iconColor: Colors.orange.shade700,
+              //         ),
+              //       ],
               //     ),
               //   ),
               // ),
-              // User Info Card
-              Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                margin: const EdgeInsets.only(bottom: 20),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundColor: Colors.blueAccent.shade100,
-                        child: Icon(
-                          Icons.person,
-                          size: 50,
-                          color: Colors.blueAccent.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Text(
-                        _username,
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blueAccent.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        _userStatus ?? 'وضعیت نامشخص',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const Divider(height: 25, thickness: 1),
-                      _buildInfoRow(
-                        'تاریخ انقضا:',
-                        _expiryDate ?? 'نامشخص',
-                        icon: Icons.calendar_today,
-                        iconColor: Colors.orange.shade700,
-                      ),
-                      _buildInfoRow(
-                        'روزهای باقی مانده:',
-                        '$_remainingDays روز',
-                        icon: Icons.hourglass_empty,
-                        iconColor: Colors.orange.shade700,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -1375,6 +1102,135 @@ class _HomeScreenState extends State<HomeScreen> {
       leading: Icon(icon, color: Colors.white),
       title: Text(title, style: const TextStyle(color: Colors.white)),
       onTap: onTap,
+    );
+  }
+
+  // New method to encapsulate the dialog logic for logged-in devices
+  void _showLoggedInDevicesDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          backgroundColor: Colors.white,
+          title: Row(
+            children: [
+              Icon(Icons.devices, color: Colors.blueAccent.shade700),
+              const SizedBox(width: 10),
+              Text(
+                'دستگاه‌های وارد شده',
+                style: TextStyle(
+                  color: Colors.blueAccent.shade700,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: _loggedInDevices.isEmpty
+              ? const Text(
+                  'هیچ دستگاهی یافت نشد.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                )
+              : SingleChildScrollView(
+                  child: ListBody(
+                    children: _loggedInDevices.map((device) {
+                      final deviceName = device['device_name'] ?? 'نامشخص';
+                      final username =
+                          device['username'] ??
+                          'نامشخص'; // This username is from the device data, not the current user.
+                      final lastLoginGregorian =
+                          device['last_login'] ?? 'نامشخص';
+
+                      String lastLoginShamsi = 'نامشخص';
+                      try {
+                        final gregorianDate = DateTime.parse(
+                          lastLoginGregorian,
+                        );
+                        final jalaliDate = Jalali.fromDateTime(gregorianDate);
+                        final formatter = jalaliDate.formatter;
+                        lastLoginShamsi =
+                            '${formatter.yyyy}/${formatter.mm}/${formatter.dd} ${formatter.y}:${formatter.y}:${formatter.y}';
+                      } catch (e) {
+                        lastLoginShamsi = lastLoginGregorian;
+                      }
+
+                      return Card(
+                        elevation: 2,
+                        margin: const EdgeInsets.symmetric(vertical: 6.0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                _getDeviceIcon(deviceName),
+                                color: Colors.blueAccent,
+                                size: 28,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'دستگاه: $deviceName',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'کاربر: $username', // This is the username associated with the device entry
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'آخرین ورود: $lastLoginShamsi',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.black45,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+          actions: <Widget>[
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.blueAccent.shade700,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'بستن',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1423,15 +1279,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getInt('user_id'); // Get userId before removing it
+    final username = prefs.getString('username'); // Get username
+    final deviceName = await _getDeviceName(); // Get device name
 
     // Send logout status to server BEFORE removing user_id from local storage
-    if (userId != null) {
-      // When logging out, we don't send deviceName as it's not relevant for logout status
+    if (userId != null && username != null) {
       await _v2rayService.sendLoginStatus(
         userId,
         false,
-        '',
-      ); // Pass empty string for deviceName
+        deviceName, // Pass deviceName
+      );
     }
 
     await prefs.remove('user_id');
@@ -1444,5 +1301,18 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
+  }
+
+  // Add this method to get device name for logout
+  Future<String> _getDeviceName() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    if (Platform.isAndroid) {
+      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+      return "${androidInfo.manufacturer} ${androidInfo.model}";
+    } else if (Platform.isIOS) {
+      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+      return iosInfo.name;
+    }
+    return "Unknown Device";
   }
 }

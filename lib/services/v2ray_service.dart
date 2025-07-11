@@ -158,6 +158,26 @@ class V2RayService with ChangeNotifier {
     }
   }
 
+  /// [NEW METHOD] Measures the real delay of a server by connecting and making a request.
+  /// Returns the delay in milliseconds, or a negative value on error.
+  Future<int> getRealPing(V2RayConfig config) async {
+    try {
+      if (!_isInitialized) {
+        _logController.add('V2Ray not initialized, cannot get server delay.');
+        await _initializeV2Ray(); // Attempt to initialize if not already
+        if (!_isInitialized) return -99;
+      }
+      _logController.add('Getting real server delay for: ${config.name}');
+      // This method internally connects, tests, and disconnects.
+      final delay = await _v2ray.getServerDelay(config: config.fullConfigJson);
+      _logController.add('Real delay for ${config.name}: $delay ms');
+      return delay;
+    } catch (e) {
+      _logController.add('Error getting server delay for ${config.name}: $e');
+      return -1; // General error
+    }
+  }
+
   void _handleStatusChange(V2RayStatus status) {
     _status = status;
     if (status.state == 'CONNECTED' && !_isConnected) {
@@ -568,12 +588,26 @@ class V2RayService with ChangeNotifier {
   }
 
   // اضافه شدن متد جدید برای واکشی لیست دستگاه‌های وارد شده
-  // این متد اکنون userId را به عنوان پارامتر دریافت می‌کند
-  Future<List<Map<String, dynamic>>> fetchLoggedInDevices(int userId) async {
+  // این متد اکنون username را به عنوان پارامتر دریافت می‌کند
+  Future<List<Map<String, dynamic>>> fetchLoggedInDevices(
+    String username,
+  ) async {
     try {
-      // URL اکنون شامل user_id است
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getInt(
+        'user_id',
+      ); // Get user ID from SharedPreferences
+
+      if (userId == null) {
+        _logController.add(
+          'User ID not found in SharedPreferences for fetching devices.',
+        );
+        return []; // Cannot fetch devices without user ID
+      }
+
+      // URL اکنون شامل username و user_id است
       final url = Uri.parse(
-        '$_apiBaseUrl?action=getLoggedInDevices&user_id=$userId',
+        '$_apiBaseUrl?action=getLoggedInDevices&username=$username&user_id=$userId',
       );
       _logController.add('Fetching logged-in devices from API: $url');
       final response = await http.get(url);
