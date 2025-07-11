@@ -10,6 +10,8 @@ import '../models/v2ray_config.dart';
 import '../services/v2ray_service.dart';
 import 'login_screen.dart';
 import 'package:shamsi_date/shamsi_date.dart';
+import 'package:package_info_plus/package_info_plus.dart'; // Import for package info
+import 'package:url_launcher/url_launcher.dart'; // Import for launching URLs
 
 class HomeScreen extends StatefulWidget {
   final List<V2RayConfig> configs;
@@ -41,6 +43,8 @@ class _HomeScreenState extends State<HomeScreen> {
       []; // لیست جدید برای نگهداری دستگاه‌های وارد شده
   // ignore: unused_field
   String? _errorMessage; // For displaying API fetch errors
+
+  String _currentAppVersion = '1.0.1'; // Default version, will be updated
 
   final String _apiBaseUrl = 'https://blizzardping.ir/api.php';
 
@@ -95,6 +99,154 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Initial fetch for devices, get userId first
     _getInitialLoggedInDevices();
+
+    // Get current app version
+    _getAppVersion();
+  }
+
+  // New method to get the current app version
+  Future<void> _getAppVersion() async {
+    try {
+      PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      setState(() {
+        _currentAppVersion = packageInfo.version;
+      });
+    } catch (e) {
+      print('Error getting app version: $e');
+      setState(() {
+        _currentAppVersion = 'نامشخص';
+      });
+    }
+  }
+
+  // New method to check for updates on GitHub
+  Future<void> _checkForUpdate() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
+
+    try {
+      final String githubApiUrl =
+          'https://api.github.com/repos/bloodh73/HKRay_VPN/releases/latest';
+      final response = await http.get(Uri.parse(githubApiUrl));
+
+      Navigator.pop(context); // Close loading dialog
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> releaseData = json.decode(response.body);
+        final String latestVersion = releaseData['tag_name'] ?? '0.0.0';
+        final String? downloadUrl = (releaseData['assets'] as List?)
+            ?.firstWhere(
+              (asset) => asset['name'].endsWith('.apk'),
+              orElse: () => null,
+            )?['browser_download_url'];
+
+        // Remove 'v' prefix if exists for comparison
+        final cleanLatestVersion = latestVersion.startsWith('v')
+            ? latestVersion.substring(1)
+            : latestVersion;
+        final cleanCurrentVersion = _currentAppVersion.startsWith('v')
+            ? _currentAppVersion.substring(1)
+            : _currentAppVersion;
+
+        if (_compareVersions(cleanLatestVersion, cleanCurrentVersion) > 0) {
+          // New version available
+          _showUpdateDialog(latestVersion, downloadUrl);
+        } else {
+          // No new version
+          _showInfoDialog(
+            'بروزرسانی',
+            'شما از آخرین نسخه برنامه استفاده می‌کنید. (نسخه $_currentAppVersion)',
+          );
+        }
+      } else {
+        _showInfoDialog(
+          'خطا در بررسی بروزرسانی',
+          'امکان بررسی بروزرسانی وجود ندارد. کد خطا: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog in case of error
+      _showInfoDialog(
+        'خطا در بررسی بروزرسانی',
+        'خطا در اتصال به سرور GitHub: ${e.toString()}',
+      );
+    }
+  }
+
+  // Helper to compare version strings (e.g., "1.2.3" vs "1.2.4")
+  int _compareVersions(String v1, String v2) {
+    final List<int> v1Parts = v1.split('.').map(int.parse).toList();
+    final List<int> v2Parts = v2.split('.').map(int.parse).toList();
+
+    for (int i = 0; i < v1Parts.length && i < v2Parts.length; i++) {
+      if (v1Parts[i] > v2Parts[i]) return 1;
+      if (v1Parts[i] < v2Parts[i]) return -1;
+    }
+    return v1Parts.length.compareTo(v2Parts.length);
+  }
+
+  void _showUpdateDialog(String latestVersion, String? downloadUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'بروزرسانی جدید موجود است!',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'نسخه جدید $latestVersion در دسترس است. آیا مایل به بروزرسانی هستید؟',
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('بعدا'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+            },
+          ),
+          ElevatedButton(
+            child: const Text('بروزرسانی'),
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              if (downloadUrl != null) {
+                if (await canLaunchUrl(Uri.parse(downloadUrl))) {
+                  await launchUrl(Uri.parse(downloadUrl));
+                } else {
+                  _showInfoDialog(
+                    'خطا',
+                    'امکان باز کردن لینک دانلود وجود ندارد.',
+                  );
+                }
+              } else {
+                _showInfoDialog('خطا', 'لینک دانلود فایل بروزرسانی یافت نشد.');
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('باشه'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   // New method to handle initial fetch of logged-in devices with userId
@@ -277,6 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _selectServer() async {
+    print('HomeScreen: _selectServer method called.'); // لاگ جدید
     // Check connection status first
     if (_v2rayService.isConnected) {
       // If connected, show a SnackBar and exit the method
@@ -312,54 +465,127 @@ class _HomeScreenState extends State<HomeScreen> {
       final url = Uri.parse(
         '$_apiBaseUrl?action=getSubscription',
       ); // Changed action to getSubscription
+      print('HomeScreen: Fetching server list from API: $url'); // لاگ جدید
       final response = await http.get(url);
 
       Navigator.pop(context); // Close loading dialog
+
+      print(
+        'HomeScreen: API response status for server list: ${response.statusCode}',
+      ); // لاگ جدید
+      print(
+        'HomeScreen: API response body for server list: ${response.body}',
+      ); // لاگ جدید
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
         if (responseData['success'] == true) {
           final List<dynamic> shareLinks =
               responseData['share_links'] ?? []; // Expecting 'share_links'
+          print(
+            'HomeScreen: Received ${shareLinks.length} share links for server list.',
+          ); // لاگ جدید
           final List<V2RayConfig> updatedConfigs = [];
+
+          // Re-use the parsing logic from VpnWrapperScreen
           for (var link in shareLinks) {
-            try {
-              var cleanedLink = link.toString().trim();
-              // Sanitize the link to prevent parsing issues with special characters in the path
+            String linkString = link.toString().trim();
+            if (linkString.startsWith('http://') ||
+                linkString.startsWith('https://')) {
               try {
-                Uri originalUri = Uri.parse(cleanedLink);
-                Map<String, String> queryParams = Map.from(
-                  originalUri.queryParameters,
+                // Assuming _fetchAndParseSubscriptionUrl is accessible or re-implement here
+                // For simplicity, let's re-implement the logic needed for subscription URLs here
+                // Or, better, refactor VpnWrapperScreen's parsing logic into V2RayService
+                // For now, I'll put a placeholder and suggest refactoring.
+                print(
+                  'HomeScreen: Encountered subscription URL in _selectServer: $linkString. This needs proper handling.',
                 );
-                if (queryParams.containsKey('path')) {
-                  queryParams['path'] = queryParams['path']!.replaceAll(
-                    RegExp(r'[\n\r]'),
-                    '',
+                // Placeholder: In a real app, you'd call a shared parsing method here.
+                // For this example, we'll just try to parse it as a direct link, which might fail.
+                final subscriptionResponse = await http.get(
+                  Uri.parse(linkString),
+                );
+                if (subscriptionResponse.statusCode.toString().startsWith(
+                  '2',
+                )) {
+                  final String base64Content = subscriptionResponse.body;
+                  String decodedContent;
+                  try {
+                    decodedContent = utf8.decode(base64.decode(base64Content));
+                    print(
+                      'HomeScreen: Successfully decoded Base64 content from subscription URL.',
+                    );
+                  } catch (e) {
+                    print(
+                      'HomeScreen: Error decoding Base64 content from subscription URL: $e',
+                    );
+                    decodedContent = base64Content; // Fallback if not Base64
+                  }
+                  final lines = LineSplitter.split(decodedContent);
+                  for (var subLine in lines) {
+                    String trimmedSubLine = subLine.trim();
+                    if (trimmedSubLine.isNotEmpty) {
+                      try {
+                        dynamic parsedSubResult = FlutterV2ray.parseFromURL(
+                          trimmedSubLine,
+                        );
+                        if (parsedSubResult is V2RayURL) {
+                          updatedConfigs.add(
+                            V2RayConfig.fromV2RayURL(parsedSubResult),
+                          );
+                          print(
+                            'HomeScreen: Added config from subscription: ${parsedSubResult.remark}',
+                          );
+                        } else {
+                          print(
+                            'HomeScreen: Failed to parse sub-link "$trimmedSubLine": ${parsedSubResult.toString()}',
+                          );
+                        }
+                      } catch (e) {
+                        print(
+                          'HomeScreen: Error parsing sub-link "$trimmedSubLine": $e',
+                        );
+                      }
+                    }
+                  }
+                } else {
+                  print(
+                    'HomeScreen: Failed to fetch subscription content from $linkString: ${subscriptionResponse.statusCode}',
                   );
                 }
-                final cleanedUri = originalUri.replace(
-                  queryParameters: queryParams,
-                );
-                cleanedLink = cleanedUri.toString();
               } catch (e) {
                 print(
-                  'Could not parse link as URI for cleaning: $cleanedLink. Error: $e',
+                  'HomeScreen: Error fetching or parsing subscription URL $linkString: $e',
                 );
               }
+            } else {
+              // Direct V2Ray link
+              try {
+                dynamic parsedResult = FlutterV2ray.parseFromURL(linkString);
 
-              dynamic parsedResult = FlutterV2ray.parseFromURL(cleanedLink);
-
-              if (parsedResult is V2RayURL) {
-                updatedConfigs.add(V2RayConfig.fromV2RayURL(parsedResult));
-              } else {
-                String errorMessage =
-                    'Unexpected result from parser: ${parsedResult.toString()}';
-                print('Error parsing share link $link: $errorMessage');
+                if (parsedResult is V2RayURL) {
+                  updatedConfigs.add(V2RayConfig.fromV2RayURL(parsedResult));
+                  print(
+                    'HomeScreen: Added direct config: ${parsedResult.remark}',
+                  ); // لاگ جدید
+                } else {
+                  String errorMessage =
+                      'Unexpected result from parser for link "$linkString": ${parsedResult.toString()}';
+                  print(
+                    'HomeScreen: Error parsing share link: $errorMessage',
+                  ); // لاگ جدید
+                }
+              } catch (e) {
+                print(
+                  'HomeScreen: Error parsing direct share link $linkString: $e',
+                ); // لاگ جدید
               }
-            } catch (e) {
-              print('Error parsing share link $link: $e');
             }
           }
+
+          print(
+            'HomeScreen: Total updatedConfigs count: ${updatedConfigs.length}',
+          ); // لاگ جدید
 
           if (updatedConfigs.isNotEmpty) {
             // Show server list with updated configs
@@ -437,6 +663,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       Navigator.pop(context); // Close loading dialog in case of error
+      print('HomeScreen: Error in _selectServer: $e'); // لاگ جدید
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -770,6 +997,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                   );
                 },
+              ),
+              _buildDrawerItem(
+                icon: Icons.system_update,
+                title: 'بروزرسانی برنامه (v$_currentAppVersion)',
+                onTap: _checkForUpdate,
               ),
               const Divider(color: Colors.white70),
               _buildDrawerItem(

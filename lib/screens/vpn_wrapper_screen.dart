@@ -17,19 +17,16 @@ class VpnWrapperScreen extends StatefulWidget {
 }
 
 class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
-  // متد fetch به بیرون از initState منتقل شد
   late Future<List<V2RayConfig>> _v2rayConfigFuture;
   final String _apiBaseUrl = 'https://blizzardping.ir/api.php';
 
   @override
   void initState() {
     super.initState();
-    // فراخوانی متد fetch در initState تا FutureBuilder آن را اجرا کند
     _v2rayConfigFuture = _fetchV2RayConfig();
   }
 
   void _retryFetch() {
-    // این متد برای دکمه "تلاش مجدد" استفاده می‌شود
     setState(() {
       _v2rayConfigFuture = _fetchV2RayConfig();
     });
@@ -39,18 +36,50 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
     try {
       final url = Uri.parse('$_apiBaseUrl?action=getSubscription');
       final response = await http.get(url);
-      print('API Response: ${response.body}');
+      print('API Response Status: ${response.statusCode}');
+      print('API Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
         if (responseData['success']) {
           final List<dynamic> shareLinks = responseData['share_links'] ?? [];
-          final configs = _parseShareLinks(shareLinks);
+          print('Received ${shareLinks.length} share links from API.');
 
-          if (configs.isNotEmpty) {
-            return configs;
+          final List<V2RayConfig> allConfigs = [];
+          for (var link in shareLinks) {
+            String linkString = link.toString().trim();
+            if (linkString.startsWith('http://') ||
+                linkString.startsWith('https://')) {
+              // این یک URL سابسکریپشن است که باید محتوای آن واکشی و رمزگشایی شود
+              try {
+                final subscriptionConfigs = await _fetchAndParseSubscriptionUrl(
+                  linkString,
+                );
+                allConfigs.addAll(subscriptionConfigs);
+              } catch (e) {
+                print(
+                  'Error fetching or parsing subscription URL $linkString: $e',
+                );
+              }
+            } else {
+              // این یک لینک مستقیم V2Ray (vmess, vless, trojan, ss) است
+              try {
+                final parsedConfig = _parseSingleV2RayLink(linkString);
+                if (parsedConfig != null) {
+                  allConfigs.add(parsedConfig);
+                }
+              } catch (e) {
+                print('Error parsing direct V2Ray link $linkString: $e');
+              }
+            }
+          }
+
+          if (allConfigs.isNotEmpty) {
+            print(
+              'Successfully parsed ${allConfigs.length} V2Ray configs in total.',
+            );
+            return allConfigs;
           } else {
-            // اگر کانفیگی یافت نشد، یک خطا ایجاد می‌کنیم
             throw Exception('هیچ کانفیگ معتبری در اشتراک یافت نشد.');
           }
         } else {
@@ -62,52 +91,84 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
         throw Exception('خطای سرور: ${response.statusCode}');
       }
     } catch (e) {
-      // برای خطاهای شبکه یا موارد دیگر
+      print('Error fetching V2Ray config: $e');
       throw Exception(
-        'اتصال به اینترنت وجود ندارد یا سرور در دسترس نیست. VPN خود را خاموش کرده و دوباره تلاش کنید.',
+        'اتصال به اینترنت وجود ندارد یا سرور در دسترس نیست. VPN خود را خاموش کرده و دوباره تلاش کنید. خطا: $e',
       );
     }
   }
 
-  List<V2RayConfig> _parseShareLinks(List<dynamic> shareLinks) {
+  // تابع جدید برای واکشی و تجزیه محتوای یک URL سابسکریپشن
+  Future<List<V2RayConfig>> _fetchAndParseSubscriptionUrl(String url) async {
+    print('Fetching content from subscription URL: $url');
+    final response = await http.get(Uri.parse(url));
+
+    if (!response.statusCode.toString().startsWith('2')) {
+      // Check for 2xx status codes
+      throw Exception(
+        'Failed to fetch subscription content from $url: ${response.statusCode}',
+      );
+    }
+
+    // محتوای سابسکریپشن معمولاً Base64 encoded است
+    final String base64Content = response.body;
+    String decodedContent;
+    try {
+      decodedContent = utf8.decode(base64.decode(base64Content));
+      print('Successfully decoded Base64 content from $url');
+    } catch (e) {
+      print('Error decoding Base64 content from $url: $e');
+      // اگر Base64 نبود، شاید محتوا مستقیماً لینک‌ها باشد
+      decodedContent = base64Content;
+    }
+
     final List<V2RayConfig> configs = [];
-    for (var link in shareLinks) {
-      try {
-        var cleanedLink = link.toString().trim();
-        // Sanitize the link to prevent parsing issues with special characters in the path
+    final lines = LineSplitter.split(decodedContent); // تقسیم محتوا به خطوط
+
+    for (var line in lines) {
+      String trimmedLine = line.trim();
+      if (trimmedLine.isNotEmpty) {
         try {
-          Uri originalUri = Uri.parse(cleanedLink);
-          Map<String, String> queryParams = Map.from(
-            originalUri.queryParameters,
-          );
-          if (queryParams.containsKey('path')) {
-            queryParams['path'] = queryParams['path']!.replaceAll(
-              RegExp(r'[\n\r]'),
-              '',
-            );
+          final parsedConfig = _parseSingleV2RayLink(trimmedLine);
+          if (parsedConfig != null) {
+            configs.add(parsedConfig);
           }
-          final cleanedUri = originalUri.replace(queryParameters: queryParams);
-          cleanedLink = cleanedUri.toString();
         } catch (e) {
           print(
-            'Could not parse link as URI for cleaning: $cleanedLink. Error: $e',
+            'Error parsing single link from subscription content "$trimmedLine": $e',
           );
         }
-
-        dynamic parsedResult = FlutterV2ray.parseFromURL(cleanedLink);
-
-        if (parsedResult is V2RayURL) {
-          configs.add(V2RayConfig.fromV2RayURL(parsedResult));
-        } else {
-          print(
-            'Error parsing share link: $link. Reason: ${parsedResult.toString()}',
-          );
-        }
-      } catch (e) {
-        print('Error parsing share link $link: $e');
       }
     }
     return configs;
+  }
+
+  // تابع کمکی برای تجزیه یک لینک V2Ray (vmess, vless, etc.)
+  V2RayConfig? _parseSingleV2RayLink(String link) {
+    print('Attempting to parse single V2Ray link: $link');
+    try {
+      // FlutterV2ray.parseFromURL باید لینک‌های پروتکل V2Ray را مستقیماً بپذیرد
+      // بدون نیاز به پیش‌پردازش Uri.parse یا URL-decode کردن کامل لینک.
+      // اگر لینک حاوی کاراکترهای خاصی در remark باشد، کتابخانه باید آن را مدیریت کند.
+      dynamic parsedResult = FlutterV2ray.parseFromURL(link);
+      print('Parsed result type for link "$link": ${parsedResult.runtimeType}');
+
+      if (parsedResult is V2RayURL) {
+        final v2rayConfig = V2RayConfig.fromV2RayURL(parsedResult);
+        print(
+          'Successfully added config: ID=${v2rayConfig.id}, Name=${v2rayConfig.name}, Protocol=${v2rayConfig.protocol}, Server=${v2rayConfig.server}, Port=${v2rayConfig.port}',
+        );
+        return v2rayConfig;
+      } else {
+        print(
+          'Error parsing share link: $link. Reason: Unexpected result type or parsing failed: ${parsedResult.toString()}',
+        );
+        return null;
+      }
+    } catch (e) {
+      print('Error processing V2Ray link "$link": $e');
+      return null;
+    }
   }
 
   Future<void> _logout() async {
@@ -127,7 +188,6 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
       body: FutureBuilder<List<V2RayConfig>>(
         future: _v2rayConfigFuture,
         builder: (context, snapshot) {
-          // ۱. حالت در حال بارگیری
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Container(
               decoration: BoxDecoration(
@@ -153,7 +213,6 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
             );
           }
 
-          // ۲. حالت خطا
           if (snapshot.hasError) {
             return Container(
               decoration: BoxDecoration(
@@ -206,13 +265,10 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
             );
           }
 
-          // ۳. حالت موفقیت
           if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            // اگر داده‌ها با موفقیت دریافت شدند، به صفحه اصلی منتقل می‌شویم
             return HomeScreen(configs: snapshot.data!);
           }
 
-          // حالت پیش‌فرض (نباید اتفاق بیفتد)
           return const Center(child: Text('یک خطای ناشناخته رخ داد.'));
         },
       ),
