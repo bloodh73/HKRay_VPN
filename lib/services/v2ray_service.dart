@@ -360,7 +360,11 @@ class V2RayService with ChangeNotifier {
 
   /// Sends the user's login status and last login timestamp to the server.
   /// This helps in tracking active sessions and user activity.
-  Future<void> sendLoginStatus(int userId, bool isLoggedIn, String deviceName) async {
+  Future<void> sendLoginStatus(
+    int userId,
+    bool isLoggedIn,
+    String deviceName,
+  ) async {
     try {
       // Build the URL with 'action' as a query parameter
       final queryParams = <String, String>{
@@ -369,7 +373,9 @@ class V2RayService with ChangeNotifier {
       final url = Uri.parse(_apiBaseUrl).replace(queryParameters: queryParams);
 
       _logController.add('V2Ray Log: Sending login status to API: $url');
-      _logController.add('V2Ray Log: Login status data: userId=$userId, isLoggedIn=$isLoggedIn, deviceName=$deviceName');
+      _logController.add(
+        'V2Ray Log: Login status data: userId=$userId, isLoggedIn=$isLoggedIn, deviceName=$deviceName',
+      );
 
       final response = await http.post(
         url,
@@ -402,7 +408,9 @@ class V2RayService with ChangeNotifier {
         );
       }
     } catch (e, stackTrace) {
-      _logController.add('V2Ray Log: Error sending login status: $e\n$stackTrace');
+      _logController.add(
+        'V2Ray Log: Error sending login status: $e\n$stackTrace',
+      );
     }
   }
 
@@ -572,12 +580,18 @@ class V2RayService with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        _logController.add('Received response for logged-in devices: ${response.body}');
+        _logController.add(
+          'Received response for logged-in devices: ${response.body}',
+        );
         if (responseData['success'] == true) {
           if (responseData['devices'] is List) {
             // Correctly parse as List of Map<String, dynamic>
-            final devices = List<Map<String, dynamic>>.from(responseData['devices']);
-            _logController.add('Successfully parsed ${devices.length} logged-in devices.');
+            final devices = List<Map<String, dynamic>>.from(
+              responseData['devices'],
+            );
+            _logController.add(
+              'Successfully parsed ${devices.length} logged-in devices.',
+            );
             return devices;
           } else {
             _logController.add(

@@ -478,12 +478,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'HKRay VPN',
+        title: Text(
+          '❤️ $_username',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 24,
+            fontSize: 20,
           ),
         ),
         centerTitle: true,
@@ -806,93 +806,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // User Info Card
-              Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                margin: const EdgeInsets.only(bottom: 20),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundColor: Colors.blueAccent.shade100,
-                        child: Icon(
-                          Icons.person,
-                          size: 50,
-                          color: Colors.blueAccent.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Text(
-                        _username,
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blueAccent.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        _userStatus ?? 'وضعیت نامشخص',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const Divider(height: 25, thickness: 1),
-                      _buildInfoRow(
-                        'تاریخ انقضا:',
-                        _expiryDate ?? 'نامشخص',
-                        icon: Icons.calendar_today,
-                        iconColor: Colors.orange.shade700,
-                      ),
-                      _buildInfoRow(
-                        'روزهای باقی مانده:',
-                        '$_remainingDays روز',
-                        icon: Icons.hourglass_empty,
-                        iconColor: Colors.orange.shade700,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Error Message Card (if any)
-              if (_errorMessage != null)
-                Card(
-                  color: Colors.red.shade100,
-                  margin: const EdgeInsets.only(bottom: 20),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: Colors.red,
-                          size: 30,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
               // Main Connect/Disconnect Button
               GestureDetector(
                 onTap: _connectDisconnect,
@@ -972,7 +885,39 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              const SizedBox(height: 20),
+              // Error Message Card (if any)
+              if (_errorMessage != null)
+                Card(
+                  color: Colors.red.shade100,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.red,
+                          size: 30,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // const SizedBox(height: 20),
 
               // Server Selection Button
               SizedBox(
@@ -996,52 +941,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              // Usage Statistics Card
-              Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                margin: const EdgeInsets.only(bottom: 20),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'آمار مصرف:',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blueAccent.shade700,
-                        ),
-                      ),
-                      const Divider(height: 20, thickness: 1.5),
-                      _buildInfoRow(
-                        'حجم کلی:',
-                        '${(_totalVolumeMB / 1024).toStringAsFixed(2)} GB',
-                        icon: Icons.storage,
-                        iconColor: Colors.purple.shade400,
-                      ),
-                      _buildInfoRow(
-                        'حجم مصرفی:',
-                        '${(_usedVolumeMB / 1024).toStringAsFixed(2)} GB',
-                        icon: Icons.pie_chart,
-                        iconColor: Colors.red.shade400,
-                      ),
-                      _buildInfoRow(
-                        'حجم باقی مانده:',
-                        '${(_remainingVolumeMB / 1024).toStringAsFixed(2)} GB',
-                        icon: Icons.cloud_queue,
-                        iconColor: Colors.green.shade400,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
+              SizedBox(height: 20),
               // Connection Speed Card
               Card(
                 elevation: 8,
@@ -1109,24 +1009,121 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Logout Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _logout,
-                  icon: const Icon(Icons.logout, size: 24),
-                  label: const Text(
-                    'خروج از حساب',
-                    style: TextStyle(fontSize: 18),
+              // Usage Statistics Card
+              Card(
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                margin: const EdgeInsets.only(bottom: 20),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'آمار مصرف:',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueAccent.shade700,
+                        ),
+                      ),
+                      const Divider(height: 20, thickness: 1.5),
+                      _buildInfoRow(
+                        'حجم کلی:',
+                        '${(_totalVolumeMB / 1024).toStringAsFixed(2)} GB',
+                        icon: Icons.storage,
+                        iconColor: Colors.purple.shade400,
+                      ),
+                      _buildInfoRow(
+                        'حجم مصرفی:',
+                        '${(_usedVolumeMB / 1024).toStringAsFixed(2)} GB',
+                        icon: Icons.pie_chart,
+                        iconColor: Colors.red.shade400,
+                      ),
+                      _buildInfoRow(
+                        'حجم باقی مانده:',
+                        '${(_remainingVolumeMB / 1024).toStringAsFixed(2)} GB',
+                        icon: Icons.cloud_queue,
+                        iconColor: Colors.green.shade400,
+                      ),
+                    ],
                   ),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    backgroundColor: Colors.redAccent,
-                    foregroundColor: Colors.white,
-                    elevation: 5,
+                ),
+              ),
+
+              // Logout Button
+              // SizedBox(
+              //   width: double.infinity,
+              //   child: ElevatedButton.icon(
+              //     onPressed: _logout,
+              //     icon: const Icon(Icons.logout, size: 24),
+              //     label: const Text(
+              //       'خروج از حساب',
+              //       style: TextStyle(fontSize: 18),
+              //     ),
+              //     style: ElevatedButton.styleFrom(
+              //       padding: const EdgeInsets.symmetric(vertical: 15),
+              //       shape: RoundedRectangleBorder(
+              //         borderRadius: BorderRadius.circular(15),
+              //       ),
+              //       backgroundColor: Colors.redAccent,
+              //       foregroundColor: Colors.white,
+              //       elevation: 5,
+              //     ),
+              //   ),
+              // ),
+              // User Info Card
+              Card(
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                margin: const EdgeInsets.only(bottom: 20),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.blueAccent.shade100,
+                        child: Icon(
+                          Icons.person,
+                          size: 50,
+                          color: Colors.blueAccent.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      Text(
+                        _username,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueAccent.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        _userStatus ?? 'وضعیت نامشخص',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const Divider(height: 25, thickness: 1),
+                      _buildInfoRow(
+                        'تاریخ انقضا:',
+                        _expiryDate ?? 'نامشخص',
+                        icon: Icons.calendar_today,
+                        iconColor: Colors.orange.shade700,
+                      ),
+                      _buildInfoRow(
+                        'روزهای باقی مانده:',
+                        '$_remainingDays روز',
+                        icon: Icons.hourglass_empty,
+                        iconColor: Colors.orange.shade700,
+                      ),
+                    ],
                   ),
                 ),
               ),
