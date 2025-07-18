@@ -284,7 +284,8 @@ class _ServerListScreenState extends State<ServerListScreen> {
                                         ),
                                 ),
                                 onTap: () {
-                                  setState(() => _selectedConfig = config);
+                                  // با کلیک روی سرور، انتخاب شده و به صفحه قبل بازگردانده می‌شود
+                                  Navigator.pop(context, config);
                                 },
                               ),
                             );

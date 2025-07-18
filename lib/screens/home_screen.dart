@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:HKRay_vpn/screens/server_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
-import 'package:hkray_vpn/screens/server_list_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -323,7 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
         } else {
           setState(() {
             _errorMessage =
-                responseData['message'] ?? 'خطا در واکشی اطلاعات کاربر.';
+                responseData['message'] ?? 'اطلاعات کاربر دریافت نشد.';
           });
         }
       } else {
@@ -333,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'خطا در واکشی اطلاعات کاربر: $e';
+        _errorMessage = 'اطلاعات کاربر دریافت نشد';
       });
     }
   }
@@ -438,7 +438,7 @@ class _HomeScreenState extends State<HomeScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(fontFamily: 'Vazirmatn'),
           ),
-          backgroundColor: Colors.orangeAccent,
+          backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
           margin: EdgeInsets.all(12),
           shape: RoundedRectangleBorder(
@@ -640,7 +640,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          '❤️ $_username',
+          _username,
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,

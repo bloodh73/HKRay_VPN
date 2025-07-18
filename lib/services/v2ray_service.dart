@@ -275,18 +275,8 @@ class V2RayService with ChangeNotifier {
         'Raw traffic - Uploaded: $uploaded bytes, Downloaded: $downloaded bytes',
       );
 
-      // Build the base URL with action and user_id as query parameters
-      final queryParams = <String, String>{
-        // Corrected action from 'update_usage' to 'updateTraffic'
-        'action': 'updateTraffic',
-        'user_id': userId.toString(),
-      };
-
-      // Add token to query params if available
-      if (token != null && token.isNotEmpty) {
-        queryParams['token'] = token;
-      }
-
+      // Build the base URL with action as query parameter
+      final queryParams = <String, String>{'action': 'updateTraffic'};
       final uri = Uri.parse(_apiBaseUrl).replace(queryParameters: queryParams);
 
       // Log the exact URL being called (without token for security)
@@ -297,8 +287,8 @@ class V2RayService with ChangeNotifier {
 
       // Prepare the request body with bytes and additional required fields
       final requestData = {
+        'user_id': userId.toString(), // <-- ADDED user_id to the body
         'bytes': (uploaded + downloaded).toString(),
-        // Corrected keys from 'uploaded' to 'upload' and 'downloaded' to 'download'
         'upload': uploaded.toString(),
         'download': downloaded.toString(),
         'server': _currentConfig?.id ?? '',

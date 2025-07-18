@@ -1,10 +1,10 @@
+import 'package:HKRay_vpn/screens/login_screen.dart';
+import 'package:HKRay_vpn/screens/vpn_wrapper_screen.dart';
+import 'package:HKRay_vpn/services/v2ray_service.dart';
 import 'package:flutter/material.dart';
-import 'package:hkray_vpn/screens/login_screen.dart';
-import 'package:hkray_vpn/screens/vpn_wrapper_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:hkray_vpn/services/v2ray_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -58,7 +58,9 @@ class _MyAppState extends State<MyApp> {
           colorScheme: ColorScheme.fromSwatch().copyWith(
             primary: const Color(0xFF4A90E2), // آبی روشن
             secondary: const Color(0xFF50E3C2), // فیروزه‌ای
-            surface: const Color(0xFFF0F2F5), // خاکستری روشن برای پس‌زمینه کارت‌ها
+            surface: const Color(
+              0xFFF0F2F5,
+            ), // خاکستری روشن برای پس‌زمینه کارت‌ها
             background: const Color(0xFFE0E5EC), // رنگ پس‌زمینه کلی
             onPrimary: Colors.white,
             onSecondary: Colors.white,
@@ -66,11 +68,11 @@ class _MyAppState extends State<MyApp> {
             onBackground: Colors.black87,
             error: const Color(0xFFE04040), // قرمز برای خطاها
           ),
-          scaffoldBackgroundColor: const Color(0xFFE0E5EC), // پس‌زمینه کلی اسکفولد
-
+          scaffoldBackgroundColor: const Color(
+            0xFFE0E5EC,
+          ), // پس‌زمینه کلی اسکفولد
           // فونت برنامه (فرض بر وجود فونت در پروژه)
           fontFamily: 'Vazirmatn', // نام فونت فارسی (مثلاً Vazirmatn)
-
           // تم AppBar
           appBarTheme: AppBarTheme(
             backgroundColor: const Color(0xFF4A90E2), // رنگ آبی روشن
@@ -120,7 +122,9 @@ class _MyAppState extends State<MyApp> {
               borderSide: BorderSide.none, // بدون خط دور
             ),
             filled: true,
-            fillColor: Colors.white.withOpacity(0.9), // رنگ پر شده سفید با شفافیت
+            fillColor: Colors.white.withOpacity(
+              0.9,
+            ), // رنگ پر شده سفید با شفافیت
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 20,
               vertical: 16,
@@ -138,28 +142,100 @@ class _MyAppState extends State<MyApp> {
 
           // تم Text
           textTheme: TextTheme(
-            displayLarge: TextStyle(fontFamily: 'Vazirmatn', fontSize: 57, fontWeight: FontWeight.bold, color: Colors.black87),
-            displayMedium: TextStyle(fontFamily: 'Vazirmatn', fontSize: 45, fontWeight: FontWeight.bold, color: Colors.black87),
-            displaySmall: TextStyle(fontFamily: 'Vazirmatn', fontSize: 36, fontWeight: FontWeight.bold, color: Colors.black87),
-            headlineLarge: TextStyle(fontFamily: 'Vazirmatn', fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black87),
-            headlineMedium: TextStyle(fontFamily: 'Vazirmatn', fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
-            headlineSmall: TextStyle(fontFamily: 'Vazirmatn', fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
-            titleLarge: TextStyle(fontFamily: 'Vazirmatn', fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
-            titleMedium: TextStyle(fontFamily: 'Vazirmatn', fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
-            titleSmall: TextStyle(fontFamily: 'Vazirmatn', fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
-            bodyLarge: TextStyle(fontFamily: 'Vazirmatn', fontSize: 16, color: Colors.black87),
-            bodyMedium: TextStyle(fontFamily: 'Vazirmatn', fontSize: 14, color: Colors.black87),
-            bodySmall: TextStyle(fontFamily: 'Vazirmatn', fontSize: 12, color: Colors.black54),
-            labelLarge: TextStyle(fontFamily: 'Vazirmatn', fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
-            labelMedium: TextStyle(fontFamily: 'Vazirmatn', fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87),
-            labelSmall: TextStyle(fontFamily: 'Vazirmatn', fontSize: 10, fontWeight: FontWeight.w500, color: Colors.black54),
+            displayLarge: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 57,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            displayMedium: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 45,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            displaySmall: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            headlineLarge: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            headlineMedium: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            headlineSmall: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            titleLarge: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            titleMedium: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+            titleSmall: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+            bodyLarge: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 16,
+              color: Colors.black87,
+            ),
+            bodyMedium: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 14,
+              color: Colors.black87,
+            ),
+            bodySmall: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 12,
+              color: Colors.black54,
+            ),
+            labelLarge: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            labelMedium: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+            labelSmall: TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: Colors.black54,
+            ),
           ),
         ),
         home: _isLoggedIn == null
             ? const Scaffold(body: Center(child: CircularProgressIndicator()))
             : _isLoggedIn!
-                ? const VpnWrapperScreen()
-                : const LoginScreen(),
+            ? const VpnWrapperScreen()
+            : const LoginScreen(),
       ),
     );
   }

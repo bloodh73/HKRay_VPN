@@ -1,5 +1,5 @@
+import 'package:HKRay_vpn/services/v2ray_service.dart';
 import 'package:flutter/material.dart';
-import 'package:hkray_vpn/services/v2ray_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
         body: {
           'username': username,
           'password': password,
-          'device_name': deviceName, // اضافه کردن نام دستگاه به درخواست
+          'device_name': deviceName,
         },
       );
 
@@ -60,7 +60,15 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setInt('user_id', responseData['user_id']);
           await prefs.setString('username', username);
 
-          // ارسال وضعیت ورود به سرور
+          // --- NEW: Save the authentication token ---
+          if (responseData['token'] != null) {
+            await prefs.setString('token', responseData['token']);
+            print('Token saved successfully.');
+          } else {
+            print('Token not found in login response.');
+          }
+          // --- END NEW ---
+
           // ignore: use_build_context_synchronously
           await Provider.of<V2RayService>(
             context,
@@ -84,9 +92,11 @@ class _LoginScreenState extends State<LoginScreen> {
       // ignore: use_build_context_synchronously
       _showErrorDialog('خطا در برقراری ارتباط: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -127,7 +137,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        // پس‌زمینه گرادیان برای زیبایی بیشتر
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [Color(0xFF4A90E2), Color(0xFF50E3C2)],
@@ -141,7 +150,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                // لوگو یا عنوان برنامه
                 ShaderMask(
                   shaderCallback: (bounds) => const LinearGradient(
                     colors: [Colors.white, Color(0xFFF0F2F5)],
@@ -152,7 +160,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     'HKRay VPN',
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.white, // رنگ اصلی برای ماسک
+                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -165,7 +173,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 48),
-                // فیلد نام کاربری
                 TextField(
                   controller: _usernameController,
                   decoration: InputDecoration(
@@ -175,31 +182,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       Icons.person,
                       color: Color(0xFF4A90E2),
                     ),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.9),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF4A90E2),
-                        width: 2,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
-                // فیلد رمز عبور
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
@@ -209,27 +194,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: const Icon(
                       Icons.lock,
                       color: Color(0xFF4A90E2),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.9),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF4A90E2),
-                        width: 2,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
                     ),
                   ),
                 ),
@@ -261,10 +225,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: ElevatedButton(
                           onPressed: _login,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors
-                                .transparent, // شفاف کردن پس‌زمینه دکمه برای نمایش گرادیان
-                            shadowColor:
-                                Colors.transparent, // حذف سایه پیش‌فرض دکمه
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),

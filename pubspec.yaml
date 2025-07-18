@@ -1,8 +1,8 @@
-name: hkray_vpn
-description: "A new Flutter project."
+name: HKRay_vpn
+description: "HKRay_vpn."
 publish_to: 'none'
 
-version: 1.0.3
+version: 1.0.2
 
 environment:
   sdk: ^3.8.0
