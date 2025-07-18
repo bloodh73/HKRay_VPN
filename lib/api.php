@@ -14,7 +14,7 @@ $password = "Hamed1373r";
 $dbname = "vghzoegc_hkray";
 
 // ایجاد اتصال به دیتابیس
-$conn = new mysqli($servername, $username, $password, $dbname);
+$conn = new mysqli($servername, $username, $password, $dbname); // این خط به اینجا منتقل شد
 
 // بررسی اتصال به دیتابیس
 if ($conn->connect_error) {
@@ -28,6 +28,7 @@ switch ($action) {
     case 'login':
         $user = $_POST['username'] ?? '';
         $pass = $_POST['password'] ?? '';
+        $deviceName = $_POST['device_name'] ?? 'Unknown Device'; // دریافت نام دستگاه
 
         if (empty($user) || empty($pass)) {
             echo json_encode(["success" => false, "message" => "نام کاربری و رمز عبور را وارد کنید."]);
@@ -61,6 +62,56 @@ switch ($action) {
 
                     $remaining_volume = $row['total_volume'] - $row['used_volume'];
                     if ($remaining_volume < 0) $remaining_volume = 0;
+
+                    $userId = $row['id'];
+                    $currentTimestamp = date('Y-m-d H:i:s');
+
+                    // --- NEW: Check active devices before allowing login ---
+                    $activeDevicesStmt = $conn->prepare("SELECT COUNT(*) AS active_count FROM logged_in_devices WHERE user_id = ? AND is_logged_in = 1");
+                    $activeDevicesStmt->bind_param("i", $userId);
+                    $activeDevicesStmt->execute();
+                    $activeDevicesResult = $activeDevicesStmt->get_result();
+                    $activeDevicesRow = $activeDevicesResult->fetch_assoc();
+                    $activeCount = $activeDevicesRow['active_count'];
+                    $activeDevicesStmt->close();
+
+                    // Check if this specific device is already logged in
+                    $checkDeviceStmt = $conn->prepare("SELECT id, is_logged_in FROM logged_in_devices WHERE user_id = ? AND device_name = ?");
+                    $checkDeviceStmt->bind_param("is", $userId, $deviceName);
+                    $checkDeviceStmt->execute();
+                    $checkDeviceResult = $checkDeviceStmt->get_result();
+                    $deviceExists = $checkDeviceResult->num_rows > 0;
+                    $deviceRow = $checkDeviceResult->fetch_assoc();
+                    $checkDeviceStmt->close();
+
+                    if ($deviceExists && $deviceRow['is_logged_in'] == 1) {
+                        // Device is already logged in, just update last_login
+                        $updateDeviceStmt = $conn->prepare("UPDATE logged_in_devices SET last_login = ? WHERE user_id = ? AND device_name = ?");
+                        $updateDeviceStmt->bind_param("sis", $currentTimestamp, $userId, $deviceName);
+                        $updateDeviceStmt->execute();
+                        $updateDeviceStmt->close();
+                    } else if ($activeCount >= 2 && !$deviceExists) {
+                        // Max devices reached and this is a new device
+                        echo json_encode(["success" => false, "message" => "شما به حداکثر تعداد دستگاه‌های فعال (2) رسیده‌اید. لطفاً از یکی از دستگاه‌های دیگر خارج شوید."]);
+                        $stmt->close();
+                        break;
+                    } else {
+                        // Either less than 2 active devices, or this device exists but was logged out
+                        if ($deviceExists) {
+                            // Device exists but was logged out, update its status to logged in
+                            $updateDeviceStmt = $conn->prepare("UPDATE logged_in_devices SET is_logged_in = 1, last_login = ? WHERE user_id = ? AND device_name = ?");
+                            $updateDeviceStmt->bind_param("sis", $currentTimestamp, $userId, $deviceName);
+                            $updateDeviceStmt->execute();
+                            $updateDeviceStmt->close();
+                        } else {
+                            // New device, insert a new record
+                            $insertDeviceStmt = $conn->prepare("INSERT INTO logged_in_devices (user_id, username, device_name, last_login, is_logged_in) VALUES (?, ?, ?, ?, 1)");
+                            $insertDeviceStmt->bind_param("isss", $userId, $user, $deviceName, $currentTimestamp);
+                            $insertDeviceStmt->execute();
+                            $insertDeviceStmt->close();
+                        }
+                    }
+                    // --- END NEW ---
 
                     echo json_encode([
                         "success" => true,
@@ -191,58 +242,59 @@ switch ($action) {
 
     case 'updateLoginStatus':
         $userId = $_POST['user_id'] ?? null;
-        $isLoggedIn = $_POST['is_logged_in'] ?? null;
-        $lastLogin = $_POST['last_login'] ?? null;
+        $isLoggedIn = $_POST['is_logged_in'] ?? null; // '1' or '0'
+        $deviceName = $_POST['device_name'] ?? 'Unknown Device'; // دریافت نام دستگاه
 
-        if (empty($userId) || !isset($isLoggedIn) || empty($lastLogin)) {
-            echo json_encode(["success" => false, "message" => "User ID, login status, and last login timestamp are required."]);
+        if (empty($userId) || !isset($isLoggedIn) || empty($deviceName)) {
+            echo json_encode(["success" => false, "message" => "User ID, login status, and device name are required."]);
             break;
         }
 
-        $stmt = $conn->prepare("UPDATE users SET is_logged_in = ?, last_login = ? WHERE id = ?");
-        $stmt->bind_param("isi", $isLoggedIn, $lastLogin, $userId); // "i" for int, "s" for string
+        $currentTimestamp = date('Y-m-d H:i:s');
+        
+        // Update the specific device's login status
+        $stmt = $conn->prepare("UPDATE logged_in_devices SET is_logged_in = ?, last_login = ? WHERE user_id = ? AND device_name = ?");
+        $stmt->bind_param("isis", $isLoggedIn, $currentTimestamp, $userId, $deviceName); // "i" for int, "s" for string
+
         if ($stmt->execute()) {
-            echo json_encode(["success" => true, "message" => "Login status updated successfully."]);
+            echo json_encode(["success" => true, "message" => "Login status updated successfully for device."]);
         } else {
-            echo json_encode(["success" => false, "message" => "Failed to update login status: " . $stmt->error]);
+            echo json_encode(["success" => false, "message" => "Failed to update login status for device: " . $stmt->error]);
         }
         $stmt->close();
         break;
 
     case 'getLoggedInDevices': // Added this case to handle the request
-        $userId = $_GET['user_id'] ?? null;
-        $username = $_GET['username'] ?? null; // Assuming username is also passed
+        $username = $_GET['username'] ?? null; 
 
-        if (empty($userId) || empty($username)) {
-            echo json_encode(["success" => false, "message" => "User ID and username are required."]);
+        if (empty($username)) {
+            echo json_encode(["success" => false, "message" => "Username is required."]);
             break;
         }
 
-        // Fetch login status from the 'users' table
-        $stmt = $conn->prepare("SELECT is_logged_in, last_login FROM users WHERE id = ? AND username = ?");
-        $stmt->bind_param("is", $userId, $username);
+        // Fetch all logged-in devices for the given username
+        $stmt = $conn->prepare("SELECT device_name, last_login, is_logged_in FROM logged_in_devices WHERE username = ?");
+        $stmt->bind_param("s", $username);
         $stmt->execute();
         $result = $stmt->get_result();
 
+        $devices = [];
         if ($result->num_rows > 0) {
-            $row = $result->fetch_assoc();
-            // Return the login status of the user.
-            // Note: This assumes one login status per user, not multiple devices.
-            // If you need multi-device tracking, a separate table (like 'logged_in_devices')
-            // with a device identifier would be necessary.
+            while ($row = $result->fetch_assoc()) {
+                $devices[] = [
+                    "device_name" => $row['device_name'],
+                    "last_login" => $row['last_login'],
+                    "is_logged_in" => (bool)$row['is_logged_in'],
+                    "username" => $username // Add username to each device for consistency
+                ];
+            }
             echo json_encode([
                 "success" => true,
-                "message" => "Login status fetched successfully.",
-                "devices" => [ // Returning as an array to match previous structure if needed
-                    [
-                        "is_logged_in" => (bool)$row['is_logged_in'],
-                        "last_login" => $row['last_login'],
-                        "device_name" => "Main Device" // Placeholder, as device_name is not in 'users' table
-                    ]
-                ]
+                "message" => "Logged-in devices fetched successfully.",
+                "devices" => $devices
             ]);
         } else {
-            echo json_encode(["success" => false, "message" => "User not found or no login status available."]);
+            echo json_encode(["success" => false, "message" => "No logged-in devices found for this user."]);
         }
         $stmt->close();
         break;

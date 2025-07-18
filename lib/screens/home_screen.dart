@@ -26,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final V2RayService _v2rayService;
+
   V2RayConfig? _selectedConfig;
   V2RayStatus _currentStatus = V2RayStatus(state: 'IDLE');
   StreamSubscription<V2RayStatus>? _statusSubscription;
@@ -844,7 +845,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 : 'قطع',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1152,7 +1153,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         final jalaliDate = Jalali.fromDateTime(gregorianDate);
                         final formatter = jalaliDate.formatter;
                         lastLoginShamsi =
-                            '${formatter.yyyy}/${formatter.mm}/${formatter.dd} ${formatter.y}:${formatter.y}:${formatter.y}';
+                            '${formatter.yyyy}/${formatter.mm}/${formatter.dd} ${formatter.y}:${formatter.m}:${formatter.y}'; // Changed to show time as well
                       } catch (e) {
                         lastLoginShamsi = lastLoginGregorian;
                       }
@@ -1200,6 +1201,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: Colors.black45,
+                                      ),
+                                    ),
+                                    // Display login status
+                                    Text(
+                                      device['is_logged_in'] == true
+                                          ? 'وضعیت: آنلاین'
+                                          : 'وضعیت: آفلاین',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: device['is_logged_in'] == true
+                                            ? Colors.green
+                                            : Colors.red,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ],

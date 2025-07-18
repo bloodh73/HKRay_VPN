@@ -24,7 +24,7 @@ dependencies:
   permission_handler: ^11.3.0
   fluttertoast: ^8.2.4
   cupertino_icons: ^1.0.8
-  google_fonts: ^6.2.1 # اضافه شده برای فونت‌های زیبا
+  google_fonts: ^6.2.1
   flutter_localizations:
     sdk: flutter
   shamsi_date: ^1.1.0

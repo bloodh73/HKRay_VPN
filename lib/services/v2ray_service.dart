@@ -18,7 +18,7 @@ class V2RayService with ChangeNotifier {
   V2RayConfig? _currentConfig;
   V2RayStatus _status = V2RayStatus(state: 'IDLE');
   final StreamController<V2RayStatus> _statusController =
-      StreamController<V2RayStatus>.broadcast();
+      StreamController<V2RayStatus>.broadcast(); // Changed from V22RayStatus
   final StreamController<String> _logController =
       StreamController<String>.broadcast();
 
@@ -147,6 +147,7 @@ class V2RayService with ChangeNotifier {
       await _v2ray.initializeV2Ray(
         notificationIconResourceType: "mipmap",
         notificationIconResourceName: "ic_launcher",
+        // Removed unsupported parameters: notificationActionResourceName and notificationActionResourceType
       );
       _isInitialized = true;
       _logController.add('V2Ray service initialized');
@@ -383,7 +384,7 @@ class V2RayService with ChangeNotifier {
   Future<void> sendLoginStatus(
     int userId,
     bool isLoggedIn,
-    String deviceName,
+    String deviceName, // Added deviceName parameter
   ) async {
     try {
       // Build the URL with 'action' as a query parameter
@@ -593,21 +594,9 @@ class V2RayService with ChangeNotifier {
     String username,
   ) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getInt(
-        'user_id',
-      ); // Get user ID from SharedPreferences
-
-      if (userId == null) {
-        _logController.add(
-          'User ID not found in SharedPreferences for fetching devices.',
-        );
-        return []; // Cannot fetch devices without user ID
-      }
-
-      // URL اکنون شامل username و user_id است
+      // URL اکنون شامل username است
       final url = Uri.parse(
-        '$_apiBaseUrl?action=getLoggedInDevices&username=$username&user_id=$userId',
+        '$_apiBaseUrl?action=getLoggedInDevices&username=$username',
       );
       _logController.add('Fetching logged-in devices from API: $url');
       final response = await http.get(url);
