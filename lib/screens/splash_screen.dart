@@ -3,10 +3,14 @@ import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:connectivity_plus/connectivity_plus.dart'; // Add this dependency
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/v2ray_config.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
+import 'package:loading_indicator/loading_indicator.dart';
+import 'package:package_info_plus/package_info_plus.dart'; // Import for package info
+import 'package:url_launcher/url_launcher.dart'; // Import for launching URLs
+import 'package:flutter/services.dart'; // For Clipboard
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,6 +23,7 @@ class _SplashScreenState extends State<SplashScreen> {
   String _statusMessage = 'در حال بررسی وضعیت...';
   bool _hasError = false;
   String _errorMessage = '';
+  String _currentAppVersion = '1.0.1'; // Default version, will be updated
 
   final String _apiBaseUrl = 'https://blizzardping.ir/api.php';
 
@@ -59,11 +64,21 @@ class _SplashScreenState extends State<SplashScreen> {
         return;
       }
 
+      // 3. Get current app version (needed for update check)
+      await _getAppVersion();
+
+      // 4. Check for app updates
+      setState(() {
+        _statusMessage = 'در حال بررسی بروزرسانی برنامه...';
+      });
+      await _checkForUpdate(); // This will show dialogs and potentially halt/redirect
+
+      // If the update check completes and doesn't redirect (e.g., user clicked "Later"), proceed.
       setState(() {
         _statusMessage = 'در حال دریافت تنظیمات VPN...';
       });
 
-      // 3. Fetch V2Ray configurations
+      // 5. Fetch V2Ray configurations
       List<V2RayConfig> configs = await _fetchV2RayConfig();
 
       // If everything is successful, navigate to HomeScreen
@@ -76,7 +91,7 @@ class _SplashScreenState extends State<SplashScreen> {
       setState(() {
         _hasError = true;
         _errorMessage = e.toString().replaceAll("Exception: ", "");
-        _statusMessage = 'خطا'; // Change status to reflect error
+        _statusMessage = 'خطا';
       });
       print('Initialization error: $e');
     }
@@ -90,6 +105,208 @@ class _SplashScreenState extends State<SplashScreen> {
     });
     _initializeApp();
   }
+
+  // --- App Update Logic (Copied from home_screen.dart) ---
+  Future<void> _getAppVersion() async {
+    try {
+      PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      setState(() {
+        _currentAppVersion = packageInfo.version;
+      });
+    } catch (e) {
+      print('Error getting app version: $e');
+      setState(() {
+        _currentAppVersion = 'نامشخص';
+      });
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final String githubApiUrl =
+          'https://api.github.com/repos/bloodh73/HKRay_VPN/releases/latest';
+      final response = await http.get(Uri.parse(githubApiUrl));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> releaseData = json.decode(response.body);
+        final String latestVersion = releaseData['tag_name'] ?? '0.0.0';
+        final String? downloadUrl = (releaseData['assets'] as List?)
+            ?.firstWhere(
+              (asset) => asset['name'].endsWith('.apk'),
+              orElse: () => null,
+            )?['browser_download_url'];
+
+        // Remove 'v' prefix if exists for comparison
+        final cleanLatestVersion = latestVersion.startsWith('v')
+            ? latestVersion.substring(1)
+            : latestVersion;
+        final cleanCurrentVersion = _currentAppVersion.startsWith('v')
+            ? _currentAppVersion.substring(1)
+            : _currentAppVersion;
+
+        if (_compareVersions(cleanLatestVersion, cleanCurrentVersion) > 0) {
+          // New version available
+          // ignore: use_build_context_synchronously
+          await _showUpdateDialog(latestVersion, downloadUrl);
+        }
+        // If no new version, or user dismisses, continue _initializeApp
+      } else {
+        print('Error checking for update: ${response.statusCode}');
+        // Optionally show a non-blocking message or log the error
+      }
+    } catch (e) {
+      print('Error checking for update (network/parsing): $e');
+      // Optionally show a non-blocking message or log the error
+    }
+  }
+
+  // Helper to compare version strings (e.g., "1.2.3" vs "1.2.4")
+  int _compareVersions(String v1, String v2) {
+    final List<int> v1Parts = v1.split('.').map(int.parse).toList();
+    final List<int> v2Parts = v2.split('.').map(int.parse).toList();
+
+    for (int i = 0; i < v1Parts.length && i < v2Parts.length; i++) {
+      if (v1Parts[i] > v2Parts[i]) return 1;
+      if (v1Parts[i] < v2Parts[i]) return -1;
+    }
+    return v1Parts.length.compareTo(v2Parts.length);
+  }
+
+  Future<void> _showUpdateDialog(
+    String latestVersion,
+    String? downloadUrl,
+  ) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // User must tap a button
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'بروزرسانی جدید موجود است!',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'نسخه جدید $latestVersion در دسترس است. آیا مایل به بروزرسانی هستید؟',
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('بعدا'),
+            onPressed: () {
+              Navigator.of(ctx).pop(); // Dismiss dialog, continue app flow
+            },
+          ),
+          ElevatedButton(
+            child: const Text('بروزرسانی'),
+            onPressed: () async {
+              Navigator.of(ctx).pop(); // Dismiss dialog
+              if (downloadUrl != null) {
+                print('Attempting to launch URL: $downloadUrl');
+                bool launched = false;
+                try {
+                  launched = await launchUrl(
+                    Uri.parse(downloadUrl),
+                    mode: LaunchMode.externalApplication,
+                  );
+                } catch (e) {
+                  print('Error launching URL: $e');
+                  launched = false;
+                }
+
+                if (!launched) {
+                  // ignore: use_build_context_synchronously
+                  _showInfoDialogWithCopy(
+                    'خطا در باز کردن لینک',
+                    'امکان باز کردن لینک دانلود به صورت خودکار وجود ندارد. لطفاً لینک زیر را کپی کرده و در مرورگر خود باز کنید:',
+                    downloadUrl,
+                  );
+                }
+              } else {
+                // ignore: use_build_context_synchronously
+                _showInfoDialog('خطا', 'لینک دانلود فایل بروزرسانی یافت نشد.');
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('باشه'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialogWithCopy(String title, String message, String copyText) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () async {
+                await Clipboard.setData(ClipboardData(text: copyText));
+                // ignore: use_build_context_synchronously
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(
+                    content: Text('لینک کپی شد!'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              child: Text(
+                copyText,
+                style: const TextStyle(
+                  color: Colors.blue,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('کپی لینک'),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: copyText));
+              // ignore: use_build_context_synchronously
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(
+                  content: Text('لینک کپی شد!'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              // ignore: use_build_context_synchronously
+              Navigator.of(ctx).pop();
+            },
+          ),
+          TextButton(
+            child: const Text('بستن'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  // --- End App Update Logic ---
 
   Future<List<V2RayConfig>> _fetchV2RayConfig() async {
     try {
@@ -150,7 +367,7 @@ class _SplashScreenState extends State<SplashScreen> {
     } catch (e) {
       print('Error fetching V2Ray config: $e');
       throw Exception(
-        'خطا در دریافت تنظیمات VPN. لطفاً از اتصال اینترنت خود اطمینان حاصل کرده و دوباره امتحان کنید. خطا: $e',
+        'خطا در دریافت تنظیمات VPN. لطفاً از اتصال اینترنت خود اطمینان حاصل کرده و دوباره امتحان کنید. خطا',
       );
     }
   }
@@ -238,7 +455,10 @@ class _SplashScreenState extends State<SplashScreen> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: _hasError
-                ? [Colors.red.shade800, Colors.red.shade400]
+                ? [
+                    Theme.of(context).colorScheme.error,
+                    Theme.of(context).colorScheme.error,
+                  ]
                 : [
                     Theme.of(context).primaryColor,
                     Theme.of(context).colorScheme.secondary,
@@ -256,7 +476,15 @@ class _SplashScreenState extends State<SplashScreen> {
                 if (_hasError)
                   const Icon(Icons.error, color: Colors.white, size: 60)
                 else
-                  const CircularProgressIndicator(color: Colors.white),
+                  SizedBox(
+                    width: 60,
+                    height: 60,
+                    child: LoadingIndicator(
+                      indicatorType: Indicator.ballSpinFadeLoader,
+                      colors: [Colors.white],
+                      strokeWidth: 3,
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 Text(
                   _hasError ? _errorMessage : _statusMessage,
@@ -271,7 +499,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     label: const Text('تلاش مجدد'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: Colors.red,
+                      foregroundColor: Theme.of(context).colorScheme.error,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -281,7 +509,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     label: const Text('خروج'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: Colors.red,
+                      foregroundColor: Theme.of(context).colorScheme.error,
                     ),
                   ),
                 ],

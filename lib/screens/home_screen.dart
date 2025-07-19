@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
+import 'package:loading_indicator/loading_indicator.dart'; // Import the loading_indicator package
 
 class HomeScreen extends StatefulWidget {
   final List<V2RayConfig> configs;
@@ -110,7 +111,19 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return const Center(child: CircularProgressIndicator());
+        return Center(
+          child: SizedBox(
+            width: 50,
+            height: 50,
+            child: LoadingIndicator(
+              indicatorType: Indicator.ballSpinFadeLoader,
+              colors: [
+                Theme.of(context).colorScheme.onPrimary,
+              ], // Use theme color
+              strokeWidth: 3,
+            ),
+          ),
+        );
       },
     );
 
@@ -485,24 +498,29 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return const PopScope(
-          canPop: false,
-          child: Center(
-            child: Card(
-              color: Colors.white,
-              child: Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(width: 20),
-                    Text(
-                      "در حال دریافت سرورها...",
-                      style: TextStyle(fontFamily: 'Vazirmatn'),
+        return Center(
+          child: Card(
+            color: Theme.of(context).cardTheme.color,
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: LoadingIndicator(
+                      indicatorType: Indicator.ballPulse,
+                      colors: [Theme.of(context).colorScheme.primary],
+                      strokeWidth: 2,
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    "در حال دریافت سرورها...",
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ),
             ),
           ),
@@ -672,7 +690,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        elevation: 0,
         title: Text(
           _username,
           style: Theme.of(context).appBarTheme.titleTextStyle,
@@ -680,15 +697,14 @@ class _HomeScreenState extends State<HomeScreen> {
         centerTitle: true,
         flexibleSpace: Container(
           decoration: BoxDecoration(
-            color: isDarkMode ? Color(0xFF1A2B3C) : Color(0xFF3F82CD),
-            // gradient: LinearGradient(
-            //   colors: [
-            //     Theme.of(context).primaryColor,
-            //     Theme.of(context).colorScheme.secondary,
-            //   ],
-            //   begin: Alignment.topLeft,
-            //   end: Alignment.bottomRight,
-            // ),
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).primaryColor,
+                Theme.of(context).colorScheme.secondary,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
         ),
         actions: [
@@ -930,11 +946,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (_currentStatus.state == 'CONNECTING')
                             const Padding(
                               padding: EdgeInsets.only(top: 10.0),
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: LoadingIndicator(
+                                  indicatorType: Indicator.ballSpinFadeLoader,
+                                  colors: [Colors.white],
+                                  strokeWidth: 2,
                                 ),
-                                strokeWidth: 4,
                               ),
                             ),
                         ],
@@ -975,7 +994,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              // Updated Server Selection Button with BoxDecoration
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
@@ -998,11 +1016,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       offset: const Offset(0, 8),
                     ),
                   ],
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 2,
-                    style: BorderStyle.solid,
-                  ),
                 ),
                 child: ElevatedButton.icon(
                   onPressed: _selectServer,
@@ -1013,12 +1026,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(fontSize: 18),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors
-                        .transparent, // Make button background transparent
-                    foregroundColor: Colors.white, // Text color remains white
-                    shadowColor:
-                        Colors.transparent, // Remove default button shadow
-                    elevation: 0, // Remove default button elevation
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    shadowColor: Colors.transparent,
+                    elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
@@ -1124,11 +1135,45 @@ class _HomeScreenState extends State<HomeScreen> {
                         icon: Icons.pie_chart,
                         iconColor: Theme.of(context).colorScheme.error,
                       ),
+                      // NEW: Conditional color for Remaining Volume
                       _buildInfoRow(
                         'حجم باقی مانده:',
                         '${(_remainingVolumeMB / 1024).toStringAsFixed(2)} GB',
                         icon: Icons.cloud_queue,
-                        iconColor: Theme.of(context).colorScheme.secondary,
+                        iconColor: _remainingVolumeMB <= 0
+                            ? Theme.of(context)
+                                  .colorScheme
+                                  .error // Red if 0 or less
+                            : Theme.of(
+                                context,
+                              ).colorScheme.secondary, // Normal color otherwise
+                        valueColor: _remainingVolumeMB <= 0
+                            ? Theme.of(context)
+                                  .colorScheme
+                                  .error // Red text if 0 or less
+                            : Theme.of(
+                                context,
+                              ).textTheme.bodyLarge?.color, // Normal text color
+                      ),
+                      // NEW: Conditional color for Remaining Days
+                      _buildInfoRow(
+                        'روزهای باقی مانده:',
+                        '$_remainingDays روز',
+                        icon: Icons.hourglass_empty,
+                        iconColor: _remainingDays <= 0
+                            ? Theme.of(context)
+                                  .colorScheme
+                                  .error // Red if 0 or less
+                            : Theme.of(
+                                context,
+                              ).colorScheme.secondary, // Normal color otherwise
+                        valueColor: _remainingDays <= 0
+                            ? Theme.of(context)
+                                  .colorScheme
+                                  .error // Red text if 0 or less
+                            : Theme.of(
+                                context,
+                              ).textTheme.bodyLarge?.color, // Normal text color
                       ),
                     ],
                   ),
@@ -1180,10 +1225,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   'هیچ دستگاهی یافت نشد.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.color, // Ensure text color is theme-aware
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
                   ),
                 )
               : SingleChildScrollView(
@@ -1202,7 +1244,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         final jalaliDate = Jalali.fromDateTime(gregorianDate);
                         final formatter = jalaliDate.formatter;
                         lastLoginShamsi =
-                            '${formatter.yyyy}/${formatter.mm}/${formatter.dd} ${formatter.tHH}:${formatter.tMM}:${formatter.tMS}';
+                            '${formatter.yyyy}/${formatter.mm}/${formatter.dd} ${formatter.tH}:${formatter.tM}:${formatter.tS}';
                       } catch (e) {
                         lastLoginShamsi = lastLoginGregorian;
                       }
@@ -1308,6 +1350,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String value, {
     required IconData icon,
     Color? iconColor,
+    Color? valueColor, // NEW: Optional color for the value text
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1337,7 +1380,11 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Theme.of(context).textTheme.bodyLarge?.color,
+              color:
+                  valueColor ??
+                  Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.color, // Use valueColor if provided
             ),
           ),
         ],
