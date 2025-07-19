@@ -1,35 +1,94 @@
-// فایل: vpn_wrapper_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart'; // Add this dependency
 import '../models/v2ray_config.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
-class VpnWrapperScreen extends StatefulWidget {
-  const VpnWrapperScreen({super.key});
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<VpnWrapperScreen> createState() => _VpnWrapperScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
-  late Future<List<V2RayConfig>> _v2rayConfigFuture;
+class _SplashScreenState extends State<SplashScreen> {
+  String _statusMessage = 'در حال بررسی وضعیت...';
+  bool _hasError = false;
+  String _errorMessage = '';
+
   final String _apiBaseUrl = 'https://blizzardping.ir/api.php';
 
   @override
   void initState() {
     super.initState();
-    _v2rayConfigFuture = _fetchV2RayConfig();
+    _initializeApp();
   }
 
-  void _retryFetch() {
+  Future<void> _initializeApp() async {
+    try {
+      setState(() {
+        _statusMessage = 'در حال بررسی اتصال اینترنت...';
+        _hasError = false;
+      });
+
+      // 1. Check internet connectivity
+      var connectivityResult = await (Connectivity().checkConnectivity());
+      if (connectivityResult == ConnectivityResult.none) {
+        throw Exception('اتصال به اینترنت وجود ندارد.');
+      }
+
+      setState(() {
+        _statusMessage = 'در حال بررسی وضعیت ورود...';
+      });
+
+      // 2. Check login status
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getInt('user_id');
+
+      if (userId == null) {
+        // Not logged in, navigate to LoginScreen
+        // ignore: use_build_context_synchronously
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+        return;
+      }
+
+      setState(() {
+        _statusMessage = 'در حال دریافت تنظیمات VPN...';
+      });
+
+      // 3. Fetch V2Ray configurations
+      List<V2RayConfig> configs = await _fetchV2RayConfig();
+
+      // If everything is successful, navigate to HomeScreen
+      // ignore: use_build_context_synchronously
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomeScreen(configs: configs)),
+      );
+    } catch (e) {
+      setState(() {
+        _hasError = true;
+        _errorMessage = e.toString().replaceAll("Exception: ", "");
+        _statusMessage = 'خطا'; // Change status to reflect error
+      });
+      print('Initialization error: $e');
+    }
+  }
+
+  void _retryInitialization() {
     setState(() {
-      _v2rayConfigFuture = _fetchV2RayConfig();
+      _hasError = false;
+      _errorMessage = '';
+      _statusMessage = 'در حال بررسی وضعیت...';
     });
+    _initializeApp();
   }
 
   Future<List<V2RayConfig>> _fetchV2RayConfig() async {
@@ -50,7 +109,6 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
             String linkString = link.toString().trim();
             if (linkString.startsWith('http://') ||
                 linkString.startsWith('https://')) {
-              // این یک URL سابسکریپشن است که باید محتوای آن واکشی و رمزگشایی شود
               try {
                 final subscriptionConfigs = await _fetchAndParseSubscriptionUrl(
                   linkString,
@@ -62,7 +120,6 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
                 );
               }
             } else {
-              // این یک لینک مستقیم V2Ray (vmess, vless, trojan, ss) است
               try {
                 final parsedConfig = _parseSingleV2RayLink(linkString);
                 if (parsedConfig != null) {
@@ -93,24 +150,21 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
     } catch (e) {
       print('Error fetching V2Ray config: $e');
       throw Exception(
-        'اتصال به اینترنت وجود ندارد یا سرور در دسترس نیست. VPN خود را خاموش کرده و دوباره تلاش کنید. خطا',
+        'خطا در دریافت تنظیمات VPN. لطفاً از اتصال اینترنت خود اطمینان حاصل کرده و دوباره امتحان کنید. خطا: $e',
       );
     }
   }
 
-  // تابع جدید برای واکشی و تجزیه محتوای یک URL سابسکریپشن
   Future<List<V2RayConfig>> _fetchAndParseSubscriptionUrl(String url) async {
     print('Fetching content from subscription URL: $url');
     final response = await http.get(Uri.parse(url));
 
     if (!response.statusCode.toString().startsWith('2')) {
-      // Check for 2xx status codes
       throw Exception(
         'Failed to fetch subscription content from $url: ${response.statusCode}',
       );
     }
 
-    // محتوای سابسکریپشن معمولاً Base64 encoded است
     final String base64Content = response.body;
     String decodedContent;
     try {
@@ -118,12 +172,11 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
       print('Successfully decoded Base64 content from $url');
     } catch (e) {
       print('Error decoding Base64 content from $url: $e');
-      // اگر Base64 نبود، شاید محتوا مستقیماً لینک‌ها باشد
       decodedContent = base64Content;
     }
 
     final List<V2RayConfig> configs = [];
-    final lines = LineSplitter.split(decodedContent); // تقسیم محتوا به خطوط
+    final lines = LineSplitter.split(decodedContent);
 
     for (var line in lines) {
       String trimmedLine = line.trim();
@@ -143,13 +196,9 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
     return configs;
   }
 
-  // تابع کمکی برای تجزیه یک لینک V2Ray (vmess, vless, etc.)
   V2RayConfig? _parseSingleV2RayLink(String link) {
     print('Attempting to parse single V2Ray link: $link');
     try {
-      // FlutterV2ray.parseFromURL باید لینک‌های پروتکل V2Ray را مستقیماً بپذیرد
-      // بدون نیاز به پیش‌پردازش Uri.parse یا URL-decode کردن کامل لینک.
-      // اگر لینک حاوی کاراکترهای خاصی در remark باشد، کتابخانه باید آن را مدیریت کند.
       dynamic parsedResult = FlutterV2ray.parseFromURL(link);
       print('Parsed result type for link "$link": ${parsedResult.runtimeType}');
 
@@ -185,92 +234,61 @@ class _VpnWrapperScreenState extends State<VpnWrapperScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: FutureBuilder<List<V2RayConfig>>(
-        future: _v2rayConfigFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.blue.shade800, Colors.blue.shade400],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(color: Colors.white),
-                    SizedBox(height: 16),
-                    Text(
-                      'در حال دریافت تنظیمات VPN...',
-                      style: TextStyle(color: Colors.white, fontSize: 16),
-                    ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: _hasError
+                ? [Colors.red.shade800, Colors.red.shade400]
+                : [
+                    Theme.of(context).primaryColor,
+                    Theme.of(context).colorScheme.secondary,
                   ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_hasError)
+                  const Icon(Icons.error, color: Colors.white, size: 60)
+                else
+                  const CircularProgressIndicator(color: Colors.white),
+                const SizedBox(height: 16),
+                Text(
+                  _hasError ? _errorMessage : _statusMessage,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
-              ),
-            );
-          }
-
-          if (snapshot.hasError) {
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.red.shade800, Colors.red.shade400],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error, color: Colors.white, size: 60),
-                      const SizedBox(height: 16),
-                      Text(
-                        snapshot.error.toString().replaceAll("Exception: ", ""),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: _retryFetch,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('تلاش مجدد'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.red,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton.icon(
-                        onPressed: _logout,
-                        icon: const Icon(Icons.logout),
-                        label: const Text('خروج'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.red,
-                        ),
-                      ),
-                    ],
+                if (_hasError) ...[
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _retryInitialization,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('تلاش مجدد'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.red,
+                    ),
                   ),
-                ),
-              ),
-            );
-          }
-
-          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            return HomeScreen(configs: snapshot.data!);
-          }
-
-          return const Center(child: Text('یک خطای ناشناخته رخ داد.'));
-        },
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: _logout,
+                    icon: const Icon(Icons.logout),
+                    label: const Text('خروج'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.red,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

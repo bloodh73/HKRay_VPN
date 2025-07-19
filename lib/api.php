@@ -113,6 +113,9 @@ switch ($action) {
                     }
                     // --- END NEW ---
 
+                    // Generate a simple token for demonstration
+                    $token = bin2hex(random_bytes(16)); // Generates a 32-character hex string
+
                     echo json_encode([
                         "success" => true,
                         "message" => "ورود موفقیت آمیز",
@@ -122,7 +125,8 @@ switch ($action) {
                         "used_volume" => (int)$row['used_volume'],
                         "remaining_volume" => (int)$remaining_volume,
                         "total_days" => (int)$remaining_days, // Changed to remaining_days
-                        "expiry_date" => $row['expiry_date']
+                        "expiry_date" => $row['expiry_date'],
+                        "token" => $token // Include the generated token
                     ]);
                 }
             } else {

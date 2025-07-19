@@ -8,12 +8,14 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/v2ray_config.dart';
 import '../services/v2ray_service.dart';
+import '../services/theme_notifier.dart'; // Import ThemeNotifier
 import 'login_screen.dart';
 import 'package:shamsi_date/shamsi_date.dart';
-import 'package:package_info_plus/package_info_plus.dart'; // Import for package info
-import 'package:url_launcher/url_launcher.dart'; // Import for launching URLs
-import 'dart:io'; // Required for DeviceInfoPlugin
-import 'package:device_info_plus/device_info_plus.dart'; // Required for DeviceInfoPlugin
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/services.dart';
 
 class HomeScreen extends StatefulWidget {
   final List<V2RayConfig> configs;
@@ -32,9 +34,8 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<V2RayStatus>? _statusSubscription;
   StreamSubscription<String>? _logSubscription;
   Timer? _usageUpdateTimer;
-  Timer? _deviceListUpdateTimer; // تایمر جدید برای به‌روزرسانی لیست دستگاه‌ها
+  Timer? _deviceListUpdateTimer;
 
-  // User data
   String _username = 'کاربر';
   int _totalVolumeMB = 0;
   int _usedVolumeMB = 0;
@@ -42,11 +43,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _remainingDays = 0;
   String? _expiryDate;
   String? _userStatus;
-  List<Map<String, dynamic>> _loggedInDevices =
-      []; // لیست جدید برای نگهداری دستگاه‌های وارد شده
-  String? _errorMessage; // For displaying API fetch errors
+  List<Map<String, dynamic>> _loggedInDevices = [];
+  String? _errorMessage;
 
-  String _currentAppVersion = '1.0.1'; // Default version, will be updated
+  String _currentAppVersion = '1.0.1';
 
   final String _apiBaseUrl = 'https://blizzardping.ir/api.php';
 
@@ -55,7 +55,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _v2rayService = Provider.of<V2RayService>(context, listen: false);
 
-    // Debug print to check received configs
     print('HomeScreen - Received ${widget.configs.length} configs');
     widget.configs.asMap().forEach((index, config) {
       print(
@@ -63,7 +62,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     });
 
-    // Initialize _selectedConfig from V2RayService's currentConfig or the first available config
     _selectedConfig = _v2rayService.currentConfig ?? widget.configs.firstOrNull;
 
     _statusSubscription = _v2rayService.statusStream.listen((status) {
@@ -73,39 +71,26 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     _logSubscription = _v2rayService.logStream.listen((log) {
-      // You can display logs in a UI component if needed, or just keep them for debugging
       print('V2Ray Log: $log');
     });
 
-    // Start a timer to fetch user details periodically
-    _usageUpdateTimer = Timer.periodic(
-      const Duration(minutes: 1), // Fetch every minute
-      (timer) {
-        _fetchUserDetails();
-      },
-    );
+    _usageUpdateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      _fetchUserDetails();
+    });
 
-    // شروع تایمر برای واکشی لیست دستگاه‌ها
-    _deviceListUpdateTimer = Timer.periodic(
-      const Duration(minutes: 5), // هر 5 دقیقه لیست دستگاه‌ها را به‌روز کن
-      (timer) async {
-        // Pass username instead of userId
-        if (_username.isNotEmpty) {
-          _fetchLoggedInDevices(_username); // Pass username to the method
-        }
-      },
-    );
+    _deviceListUpdateTimer = Timer.periodic(const Duration(minutes: 5), (
+      timer,
+    ) async {
+      if (_username.isNotEmpty) {
+        _fetchLoggedInDevices(_username);
+      }
+    });
 
-    _fetchUserDetails(); // Initial fetch
-
-    // Initial fetch for devices, get username first
+    _fetchUserDetails();
     _getInitialLoggedInDevices();
-
-    // Get current app version
     _getAppVersion();
   }
 
-  // New method to get the current app version
   Future<void> _getAppVersion() async {
     try {
       PackageInfo packageInfo = await PackageInfo.fromPlatform();
@@ -120,7 +105,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // New method to check for updates on GitHub
   Future<void> _checkForUpdate() async {
     showDialog(
       context: context,
@@ -135,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'https://api.github.com/repos/bloodh73/HKRay_VPN/releases/latest';
       final response = await http.get(Uri.parse(githubApiUrl));
 
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> releaseData = json.decode(response.body);
@@ -146,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
               orElse: () => null,
             )?['browser_download_url'];
 
-        // Remove 'v' prefix if exists for comparison
         final cleanLatestVersion = latestVersion.startsWith('v')
             ? latestVersion.substring(1)
             : latestVersion;
@@ -155,10 +138,8 @@ class _HomeScreenState extends State<HomeScreen> {
             : _currentAppVersion;
 
         if (_compareVersions(cleanLatestVersion, cleanCurrentVersion) > 0) {
-          // New version available
           _showUpdateDialog(latestVersion, downloadUrl);
         } else {
-          // No new version
           _showInfoDialog(
             'بروزرسانی',
             'شما از آخرین نسخه برنامه استفاده می‌کنید. (نسخه $_currentAppVersion)',
@@ -171,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog in case of error
+      Navigator.pop(context);
       _showInfoDialog(
         'خطا در بررسی بروزرسانی',
         'خطا در اتصال به سرور GitHub: ${e.toString()}',
@@ -179,7 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Helper to compare version strings (e.g., "1.2.3" vs "1.2.4")
   int _compareVersions(String v1, String v2) {
     final List<int> v1Parts = v1.split('.').map(int.parse).toList();
     final List<int> v2Parts = v2.split('.').map(int.parse).toList();
@@ -214,12 +194,23 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () async {
               Navigator.of(ctx).pop();
               if (downloadUrl != null) {
-                if (await canLaunchUrl(Uri.parse(downloadUrl))) {
-                  await launchUrl(Uri.parse(downloadUrl));
-                } else {
-                  _showInfoDialog(
-                    'خطا',
-                    'امکان باز کردن لینک دانلود وجود ندارد.',
+                print('Attempting to launch URL: $downloadUrl');
+                bool launched = false;
+                try {
+                  launched = await launchUrl(
+                    Uri.parse(downloadUrl),
+                    mode: LaunchMode.externalApplication,
+                  );
+                } catch (e) {
+                  print('Error launching URL: $e');
+                  launched = false;
+                }
+
+                if (!launched) {
+                  _showInfoDialogWithCopy(
+                    'خطا در باز کردن لینک',
+                    'امکان باز کردن لینک دانلود به صورت خودکار وجود ندارد. لطفاً لینک زیر را کپی کرده و در مرورگر خود باز کنید:',
+                    downloadUrl,
                   );
                 }
               } else {
@@ -250,12 +241,70 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // New method to handle initial fetch of logged-in devices with username
+  void _showInfoDialogWithCopy(String title, String message, String copyText) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () async {
+                await Clipboard.setData(ClipboardData(text: copyText));
+                // ignore: use_build_context_synchronously
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(
+                    content: Text('لینک کپی شد!'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              child: Text(
+                copyText,
+                style: const TextStyle(
+                  color: Colors.blue,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('کپی لینک'),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: copyText));
+              // ignore: use_build_context_synchronously
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(
+                  content: Text('لینک کپی شد!'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              // ignore: use_build_context_synchronously
+              Navigator.of(ctx).pop();
+            },
+          ),
+          TextButton(
+            child: const Text('بستن'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _getInitialLoggedInDevices() async {
     final prefs = await SharedPreferences.getInstance();
     final username = prefs.getString('username');
     if (username != null && username.isNotEmpty) {
-      _fetchLoggedInDevices(username); // Pass username to the method
+      _fetchLoggedInDevices(username);
     } else {
       print(
         'HomeScreen: Username not found for initial logged-in devices fetch.',
@@ -268,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _statusSubscription?.cancel();
     _logSubscription?.cancel();
     _usageUpdateTimer?.cancel();
-    _deviceListUpdateTimer?.cancel(); // کنسل کردن تایمر دستگاه‌ها
+    _deviceListUpdateTimer?.cancel();
     super.dispose();
   }
 
@@ -303,22 +352,18 @@ class _HomeScreenState extends State<HomeScreen> {
             _remainingDays = responseData['remaining_days'] ?? 0;
             _userStatus = responseData['status'];
 
-            // --- شروع بخش تبدیل تاریخ ---
             final expiryDateStr = responseData['expiry_date'];
             if (expiryDateStr != null) {
               try {
                 final gregorianDate = DateTime.parse(expiryDateStr);
                 final jalaliDate = Jalali.fromDateTime(gregorianDate);
                 final formatter = jalaliDate.formatter;
-                // فرمت تاریخ به صورت: 1404/05/10
                 _expiryDate =
                     '${formatter.yyyy}/${formatter.mm}/${formatter.dd}';
               } catch (e) {
-                _expiryDate =
-                    expiryDateStr; // اگر تبدیل ناموفق بود، همان تاریخ میلادی نمایش داده شود
+                _expiryDate = expiryDateStr;
               }
             }
-            // --- پایان بخش تبدیل تاریخ ---
           });
         } else {
           setState(() {
@@ -338,11 +383,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // متد جدید برای واکشی لیست دستگاه‌های وارد شده
-  // این متد اکنون username را به عنوان پارامتر دریافت می‌کند
   Future<void> _fetchLoggedInDevices(String username) async {
     try {
-      // Pass the current user's username to fetchLoggedInDevices
       final devices = await _v2rayService.fetchLoggedInDevices(username);
       setState(() {
         _loggedInDevices = devices;
@@ -350,25 +392,19 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       print('Error fetching logged in devices in HomeScreen: $e');
       setState(() {
-        _loggedInDevices = []; // در صورت خطا، لیست را خالی کن
+        _loggedInDevices = [];
       });
     }
   }
 
   Future<void> _connectDisconnect() async {
-    // پاک کردن پیام‌های خطای قبلی
     setState(() {
       _errorMessage = null;
     });
 
     if (_currentStatus.state == 'CONNECTED') {
-      // اگر وضعیت فعلی "متصل" است، آن را قطع کن
       await _v2rayService.disconnect();
     } else {
-      // --- شروع بخش اضافه شده ---
-      // اگر کاربر در حال تلاش برای اتصال است، اعتبار حساب او را بررسی کن
-
-      // ۱. بررسی روزهای باقیمانده
       if (_remainingDays <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -385,10 +421,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         );
-        return; // از اتصال جلوگیری کن
+        return;
       }
 
-      // ۲. بررسی حجم باقیمانده (بر اساس مگابایت)
       if (_remainingVolumeMB <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -405,16 +440,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         );
-        return; // از اتصال جلوگیری کن
+        return;
       }
-      // --- پایان بخش اضافه شده ---
 
-      // اگر اعتبار حساب معتبر بود، فرآیند اتصال را ادامه بده
       if (_selectedConfig != null) {
         print(
           'V2Ray Log: Attempting to connect with config address: ${_selectedConfig!.server}',
         );
-        // ارسال V2RayConfig object به جای fullConfigJson
         final success = await _v2rayService.connect(_selectedConfig!);
         if (!success) {
           setState(() {
@@ -449,7 +481,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // [MODIFIED] Show a more descriptive loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -483,8 +514,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final url = Uri.parse('$_apiBaseUrl?action=getSubscription');
       final response = await http.get(url);
 
-      if (!mounted) return; // Check if the widget is still in the tree
-      Navigator.pop(context); // Close loading dialog
+      if (!mounted) return;
+      Navigator.pop(context);
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
@@ -601,7 +632,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context); // Close dialog on error
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -616,7 +647,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Helper to get device icon based on device name
   IconData _getDeviceIcon(String deviceName) {
     deviceName = deviceName.toLowerCase();
     if (deviceName.contains('android')) {
@@ -630,36 +660,42 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (deviceName.contains('mac') || deviceName.contains('macos')) {
       return Icons.laptop_mac;
     } else if (deviceName.contains('linux')) {
-      return Icons.laptop_windows; // Generic laptop icon for Linux
+      return Icons.laptop_windows;
     }
-    return Icons.device_unknown; // Default icon
+    return Icons.device_unknown;
   }
 
   @override
   Widget build(BuildContext context) {
+    final themeNotifier = Provider.of<ThemeNotifier>(context);
+    final isDarkMode = themeNotifier.themeMode == ThemeMode.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
           _username,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
+          style: Theme.of(context).appBarTheme.titleTextStyle,
         ),
         centerTitle: true,
         flexibleSpace: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blueAccent.shade700, Colors.blueAccent.shade400],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: isDarkMode ? Color(0xFF1A2B3C) : Color(0xFF3F82CD),
+            // gradient: LinearGradient(
+            //   colors: [
+            //     Theme.of(context).primaryColor,
+            //     Theme.of(context).colorScheme.secondary,
+            //   ],
+            //   begin: Alignment.topLeft,
+            //   end: Alignment.bottomRight,
+            // ),
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: Icon(
+              Icons.refresh,
+              color: Theme.of(context).appBarTheme.foregroundColor,
+            ),
             onPressed: _fetchUserDetails,
             tooltip: 'به‌روزرسانی اطلاعات کاربر',
           ),
@@ -669,7 +705,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.blueAccent.shade700, Colors.blueAccent.shade400],
+              colors: [
+                Theme.of(context).primaryColor,
+                Theme.of(context).colorScheme.secondary,
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -682,13 +721,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 30,
                       backgroundColor: Colors.white70,
                       child: Icon(
                         Icons.person,
                         size: 40,
-                        color: Colors.blueAccent,
+                        color: Theme.of(context).primaryColor,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -712,7 +751,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               _buildDrawerItem(
                 icon: Icons.data_usage,
-                // تقسیم بر 1024 برای تبدیل به GB و نمایش با دو رقم اعشار
                 title:
                     'حجم کلی: ${(_totalVolumeMB / 1024).toStringAsFixed(2)} GB',
               ),
@@ -736,21 +774,58 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: 'تاریخ انقضا: $_expiryDate',
               ),
               const Divider(color: Colors.white70),
-              // بخش جدید برای نمایش دستگاه‌های وارد شده
               _buildDrawerItem(
                 icon: Icons.devices,
                 title: 'دستگاه‌های وارد شده',
                 onTap: () async {
                   if (_username.isNotEmpty) {
-                    await _fetchLoggedInDevices(_username); // Fetch latest data
+                    await _fetchLoggedInDevices(_username);
                   }
-                  _showLoggedInDevicesDialog(); // Show dialog with current data
+                  _showLoggedInDevicesDialog();
                 },
               ),
               _buildDrawerItem(
                 icon: Icons.system_update,
                 title: 'بروزرسانی برنامه (v$_currentAppVersion)',
                 onTap: _checkForUpdate,
+              ),
+              // Theme Toggle Switch
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 8.0,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 16),
+                        Text(
+                          isDarkMode ? 'حالت روشن' : 'حالت تاریک',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Switch(
+                      value: isDarkMode,
+                      onChanged: (value) {
+                        themeNotifier.toggleTheme();
+                      },
+                      activeColor: Colors.white,
+                      activeTrackColor: Colors.white.withOpacity(0.5),
+                      inactiveThumbColor: Colors.grey.shade700,
+                      inactiveTrackColor: Colors.grey.shade500.withOpacity(0.5),
+                    ),
+                  ],
+                ),
               ),
               const Divider(color: Colors.white70),
               _buildDrawerItem(
@@ -759,9 +834,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   _fetchUserDetails();
                   if (_username.isNotEmpty) {
-                    _fetchLoggedInDevices(
-                      _username,
-                    ); // Pass username to the method
+                    _fetchLoggedInDevices(_username);
                   }
                 },
               ),
@@ -777,7 +850,10 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.blue.shade100],
+            colors: [
+              Theme.of(context).colorScheme.background,
+              Theme.of(context).colorScheme.surface,
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -787,12 +863,11 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Main Connect/Disconnect Button
               GestureDetector(
                 onTap: _connectDisconnect,
                 child: Consumer<V2RayService>(
                   builder: (context, v2rayService, child) {
-                    _currentStatus = v2rayService.status; // Update local status
+                    _currentStatus = v2rayService.status;
                     return AnimatedContainer(
                       duration: const Duration(milliseconds: 400),
                       curve: Curves.easeInOut,
@@ -805,8 +880,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           colors: _currentStatus.state == 'CONNECTED'
                               ? [Colors.green.shade600, Colors.green.shade400]
                               : [
-                                  Colors.blueAccent.shade700,
-                                  Colors.blueAccent.shade400,
+                                  Theme.of(context).primaryColor,
+                                  Theme.of(context).colorScheme.secondary,
                                 ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -815,7 +890,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           BoxShadow(
                             color: _currentStatus.state == 'CONNECTED'
                                 ? Colors.green.shade300.withOpacity(0.6)
-                                : Colors.blueAccent.shade200.withOpacity(0.6),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withOpacity(0.6),
                             blurRadius: 25,
                             spreadRadius: 8,
                             offset: const Offset(0, 8),
@@ -866,10 +943,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Error Message Card (if any)
               if (_errorMessage != null)
                 Card(
-                  color: Colors.red.shade100,
+                  color: Theme.of(context).colorScheme.error.withOpacity(0.1),
                   margin: const EdgeInsets.only(bottom: 20),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
@@ -878,17 +954,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(12.0),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.error_outline,
-                          color: Colors.red,
+                          color: Theme.of(context).colorScheme.error,
                           size: 30,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _errorMessage!,
-                            style: const TextStyle(
-                              color: Colors.red,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
                               fontSize: 14,
                             ),
                           ),
@@ -898,11 +974,35 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              // const SizedBox(height: 20),
-
-              // Server Selection Button
-              SizedBox(
+              // Updated Server Selection Button with BoxDecoration
+              Container(
                 width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).primaryColor,
+                      Theme.of(context).colorScheme.secondary,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.6),
+                      blurRadius: 25,
+                      spreadRadius: 8,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 2,
+                    style: BorderStyle.solid,
+                  ),
+                ),
                 child: ElevatedButton.icon(
                   onPressed: _selectServer,
                   icon: const Icon(Icons.list, size: 24),
@@ -912,18 +1012,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(fontSize: 18),
                   ),
                   style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors
+                        .transparent, // Make button background transparent
+                    foregroundColor: Colors.white, // Text color remains white
+                    shadowColor:
+                        Colors.transparent, // Remove default button shadow
+                    elevation: 0, // Remove default button elevation
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
                     ),
-                    backgroundColor: Colors.blueAccent,
-                    foregroundColor: Colors.white,
-                    elevation: 5,
                   ),
                 ),
               ),
               SizedBox(height: 20),
-              // Connection Speed Card
               Card(
                 elevation: 8,
                 shape: RoundedRectangleBorder(
@@ -942,7 +1044,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.blueAccent.shade700,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                           ),
                           const Divider(height: 20, thickness: 1.5),
@@ -958,13 +1060,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             'سرعت دانلود:',
                             '${v2rayService.formatBytes(v2rayService.downloadSpeed)}/s',
                             icon: Icons.arrow_downward,
-                            iconColor: Colors.blue.shade400,
+                            iconColor: Theme.of(context).colorScheme.secondary,
                           ),
                           _buildInfoRow(
                             'سرعت آپلود:',
                             '${v2rayService.formatBytes(v2rayService.uploadSpeed)}/s',
                             icon: Icons.arrow_upward,
-                            iconColor: Colors.orange.shade400,
+                            iconColor: Theme.of(context).colorScheme.secondary,
                           ),
                           const Divider(),
                           _buildInfoRow(
@@ -973,7 +1075,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               v2rayService.totalDownloaded,
                             ),
                             icon: Icons.cloud_download,
-                            iconColor: Colors.teal.shade400,
+                            iconColor: Theme.of(context).colorScheme.primary,
                           ),
                           _buildInfoRow(
                             'آپلود کلی:',
@@ -981,7 +1083,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               v2rayService.totalUploaded,
                             ),
                             icon: Icons.cloud_upload,
-                            iconColor: Colors.brown.shade400,
+                            iconColor: Theme.of(context).colorScheme.primary,
                           ),
                         ],
                       );
@@ -990,7 +1092,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Usage Statistics Card
               Card(
                 elevation: 8,
                 shape: RoundedRectangleBorder(
@@ -1006,7 +1107,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         'آمار مصرف:',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.blueAccent.shade700,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       const Divider(height: 20, thickness: 1.5),
@@ -1014,79 +1115,24 @@ class _HomeScreenState extends State<HomeScreen> {
                         'حجم کلی:',
                         '${(_totalVolumeMB / 1024).toStringAsFixed(2)} GB',
                         icon: Icons.storage,
-                        iconColor: Colors.purple.shade400,
+                        iconColor: Theme.of(context).colorScheme.secondary,
                       ),
                       _buildInfoRow(
                         'حجم مصرفی:',
                         '${(_usedVolumeMB / 1024).toStringAsFixed(2)} GB',
                         icon: Icons.pie_chart,
-                        iconColor: Colors.red.shade400,
+                        iconColor: Theme.of(context).colorScheme.error,
                       ),
                       _buildInfoRow(
                         'حجم باقی مانده:',
                         '${(_remainingVolumeMB / 1024).toStringAsFixed(2)} GB',
                         icon: Icons.cloud_queue,
-                        iconColor: Colors.green.shade400,
+                        iconColor: Theme.of(context).colorScheme.secondary,
                       ),
                     ],
                   ),
                 ),
               ),
-
-              // User Info Card
-              // Card(
-              //   elevation: 8,
-              //   shape: RoundedRectangleBorder(
-              //     borderRadius: BorderRadius.circular(25),
-              //   ),
-              //   margin: const EdgeInsets.only(bottom: 20),
-              //   child: Padding(
-              //     padding: const EdgeInsets.all(20.0),
-              //     child: Column(
-              //       children: [
-              //         CircleAvatar(
-              //           radius: 40,
-              //           backgroundColor: Colors.blueAccent.shade100,
-              //           child: Icon(
-              //             Icons.person,
-              //             size: 50,
-              //             color: Colors.blueAccent.shade700,
-              //           ),
-              //         ),
-              //         const SizedBox(height: 15),
-              //         Text(
-              //           _username,
-              //           style: TextStyle(
-              //             fontSize: 22,
-              //             fontWeight: FontWeight.bold,
-              //             color: Colors.blueAccent.shade700,
-              //           ),
-              //         ),
-              //         const SizedBox(height: 5),
-              //         Text(
-              //           _userStatus ?? 'وضعیت نامشخص',
-              //           style: TextStyle(
-              //             fontSize: 16,
-              //             color: Colors.grey.shade700,
-              //           ),
-              //         ),
-              //         const Divider(height: 25, thickness: 1),
-              //         _buildInfoRow(
-              //           'تاریخ انقضا:',
-              //           _expiryDate ?? 'نامشخص',
-              //           icon: Icons.calendar_today,
-              //           iconColor: Colors.orange.shade700,
-              //         ),
-              //         _buildInfoRow(
-              //           'روزهای باقی مانده:',
-              //           '$_remainingDays روز',
-              //           icon: Icons.hourglass_empty,
-              //           iconColor: Colors.orange.shade700,
-              //         ),
-              //       ],
-              //     ),
-              //   ),
-              // ),
             ],
           ),
         ),
@@ -1106,7 +1152,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // New method to encapsulate the dialog logic for logged-in devices
   void _showLoggedInDevicesDialog() {
     showDialog(
       context: context,
@@ -1115,33 +1160,36 @@ class _HomeScreenState extends State<HomeScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).cardTheme.color,
           title: Row(
             children: [
-              Icon(Icons.devices, color: Colors.blueAccent.shade700),
+              Icon(Icons.devices, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 10),
               Text(
                 'دستگاه‌های وارد شده',
                 style: TextStyle(
-                  color: Colors.blueAccent.shade700,
+                  color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ],
           ),
           content: _loggedInDevices.isEmpty
-              ? const Text(
+              ? Text(
                   'هیچ دستگاهی یافت نشد.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color, // Ensure text color is theme-aware
+                  ),
                 )
               : SingleChildScrollView(
                   child: ListBody(
                     children: _loggedInDevices.map((device) {
                       final deviceName = device['device_name'] ?? 'نامشخص';
-                      final username =
-                          device['username'] ??
-                          'نامشخص'; // This username is from the device data, not the current user.
+                      final username = device['username'] ?? 'نامشخص';
                       final lastLoginGregorian =
                           device['last_login'] ?? 'نامشخص';
 
@@ -1153,7 +1201,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         final jalaliDate = Jalali.fromDateTime(gregorianDate);
                         final formatter = jalaliDate.formatter;
                         lastLoginShamsi =
-                            '${formatter.yyyy}/${formatter.mm}/${formatter.dd} ${formatter.y}:${formatter.m}:${formatter.y}'; // Changed to show time as well
+                            '${formatter.yyyy}/${formatter.mm}/${formatter.dd} ${formatter.tHH}:${formatter.tMM}:${formatter.tMS}';
                       } catch (e) {
                         lastLoginShamsi = lastLoginGregorian;
                       }
@@ -1164,6 +1212,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        color: Theme.of(context).colorScheme.surface,
                         child: Padding(
                           padding: const EdgeInsets.all(12.0),
                           child: Row(
@@ -1171,7 +1220,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               Icon(
                                 _getDeviceIcon(deviceName),
-                                color: Colors.blueAccent,
+                                color: Theme.of(context).colorScheme.primary,
                                 size: 28,
                               ),
                               const SizedBox(width: 12),
@@ -1181,29 +1230,34 @@ class _HomeScreenState extends State<HomeScreen> {
                                   children: [
                                     Text(
                                       'دستگاه: $deviceName',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
-                                        color: Colors.black87,
+                                        color: Theme.of(
+                                          context,
+                                        ).textTheme.bodyLarge?.color,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'کاربر: $username', // This is the username associated with the device entry
-                                      style: const TextStyle(
+                                      'کاربر: $username',
+                                      style: TextStyle(
                                         fontSize: 14,
-                                        color: Colors.black54,
+                                        color: Theme.of(
+                                          context,
+                                        ).textTheme.bodyMedium?.color,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
                                       'آخرین ورود: $lastLoginShamsi',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 12,
-                                        color: Colors.black45,
+                                        color: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.color,
                                       ),
                                     ),
-                                    // Display login status
                                     Text(
                                       device['is_logged_in'] == true
                                           ? 'وضعیت: آنلاین'
@@ -1229,7 +1283,7 @@ class _HomeScreenState extends State<HomeScreen> {
           actions: <Widget>[
             TextButton(
               style: TextButton.styleFrom(
-                foregroundColor: Colors.blueAccent.shade700,
+                foregroundColor: Theme.of(context).colorScheme.primary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -1263,26 +1317,26 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(
                 icon,
-                color: iconColor ?? Colors.blueAccent.shade400,
+                color: iconColor ?? Theme.of(context).colorScheme.secondary,
                 size: 22,
               ),
               const SizedBox(width: 12),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: Colors.black87,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
                 ),
               ),
             ],
           ),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.black,
+              color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
         ],
@@ -1292,17 +1346,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getInt('user_id'); // Get userId before removing it
-    final username = prefs.getString('username'); // Get username
-    final deviceName = await _getDeviceName(); // Get device name
+    final userId = prefs.getInt('user_id');
+    final username = prefs.getString('username');
+    final deviceName = await _getDeviceName();
 
-    // Send logout status to server BEFORE removing user_id from local storage
     if (userId != null && username != null) {
-      await _v2rayService.sendLoginStatus(
-        userId,
-        false,
-        deviceName, // Pass deviceName
-      );
+      await _v2rayService.sendLoginStatus(userId, false, deviceName);
     }
 
     await prefs.remove('user_id');
@@ -1317,7 +1366,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Add this method to get device name for logout
   Future<String> _getDeviceName() async {
     DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
     if (Platform.isAndroid) {

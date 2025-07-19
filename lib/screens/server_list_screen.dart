@@ -20,29 +20,28 @@ class ServerListScreen extends StatefulWidget {
 
 class _ServerListScreenState extends State<ServerListScreen> {
   V2RayConfig? _selectedConfig;
-  late List<V2RayConfig> _configs; // Use a state variable for sorting
+  late List<V2RayConfig> _configs;
   final Map<String, int?> _serverPings = {};
   final Map<String, bool> _isPingingServer = {};
-  bool _isSortingAndPinging = false; // To show a global loading indicator
+  bool _isSortingAndPinging = false;
 
   @override
   void initState() {
     super.initState();
     _selectedConfig = widget.currentSelectedConfig;
-    _configs = List.from(widget.configs); // Initialize the state list
+    _configs = List.from(widget.configs);
 
     for (var config in _configs) {
-      _serverPings[config.id] = 0; // 0 means not tested yet
+      _serverPings[config.id] = 0;
     }
   }
 
-  /// Pings a single server and updates its status.
   Future<void> _realPingServer(V2RayConfig config) async {
     if (_isPingingServer[config.id] == true) return;
 
     setState(() {
       _isPingingServer[config.id] = true;
-      _serverPings[config.id] = null; // Show loading
+      _serverPings[config.id] = null;
     });
 
     try {
@@ -62,18 +61,15 @@ class _ServerListScreenState extends State<ServerListScreen> {
     }
   }
 
-  /// Pings all servers, then sorts the list based on the results.
   Future<void> _pingAndSortServers() async {
     setState(() => _isSortingAndPinging = true);
 
-    // Create a list of futures to ping all servers concurrently.
     final List<Future<void>> pingFutures = [];
     for (var config in _configs) {
       pingFutures.add(_realPingServer(config));
     }
-    await Future.wait(pingFutures); // Wait for all pings to complete
+    await Future.wait(pingFutures);
 
-    // Sort the list based on ping results
     _configs.sort((a, b) {
       final pingA = _serverPings[a.id] ?? 0;
       final pingB = _serverPings[b.id] ?? 0;
@@ -82,14 +78,12 @@ class _ServerListScreenState extends State<ServerListScreen> {
       final isBValid = pingB > 0;
 
       if (isAValid && isBValid) {
-        return pingA.compareTo(pingB); // Both valid, sort by ping
+        return pingA.compareTo(pingB);
       } else if (isAValid) {
-        return -1; // A is valid, B is not, so A comes first
+        return -1;
       } else if (isBValid) {
-        return 1; // B is valid, A is not, so B comes first
+        return 1;
       } else {
-        // Both are invalid (error or untested), sort errors to the bottom
-        // A higher negative number (e.g., -1) is "better" than a lower one (-2)
         return pingB.compareTo(pingA);
       }
     });
@@ -105,58 +99,66 @@ class _ServerListScreenState extends State<ServerListScreen> {
   }
 
   Color _getPingColor(int? ping) {
-    if (ping == null || ping == 0) return Colors.grey;
-    if (ping < 0) return Colors.red;
-    if (ping < 1800) return Colors.green;
-    if (ping < 1900) return Colors.orange;
-    return Colors.red;
+    if (ping == null || ping == 0) {
+      return Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
+    }
+    if (ping < 0) return Theme.of(context).colorScheme.error;
+    if (ping < 1800) return Colors.green; // Specific color for good ping
+    if (ping < 1900) return Colors.orange; // Specific color for moderate ping
+    return Colors.red; // Specific color for bad ping
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'انتخاب سرور',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: Theme.of(context).appBarTheme.titleTextStyle,
         ),
         centerTitle: true,
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.blueAccent.shade700, Colors.blueAccent.shade400],
+              colors: [
+                Theme.of(context).primaryColor,
+                Theme.of(context).colorScheme.secondary,
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(
+            Icons.arrow_back,
+            color: Theme.of(context).appBarTheme.foregroundColor,
+          ),
           onPressed: () {
             Navigator.pop(context, _selectedConfig);
           },
         ),
-        // Removed the sort button from the AppBar
       ),
       body: Stack(
         children: [
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.blue.shade50, Colors.blue.shade100],
+                colors: [
+                  Theme.of(context).colorScheme.surface,
+                  Theme.of(context).colorScheme.surface,
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
             child: Column(
-              // Added Column to hold the button and the list
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: SizedBox(
                     height: MediaQuery.of(context).size.height * 0.07,
                     width: MediaQuery.of(context).size.height,
-
                     child: ElevatedButton.icon(
                       onPressed: _isSortingAndPinging
                           ? null
@@ -166,30 +168,40 @@ class _ServerListScreenState extends State<ServerListScreen> {
                         _isSortingAndPinging
                             ? 'در حال تست و مرتب‌سازی...'
                             : 'تست و مرتب‌سازی سرورها',
-                        style: const TextStyle(fontSize: 18),
+                        // FIX: Resolve the MaterialStateProperty<TextStyle?> to TextStyle?
+                        style: Theme.of(context)
+                            .elevatedButtonTheme
+                            .style
+                            ?.textStyle
+                            ?.resolve(WidgetState.values.toSet()),
                       ),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .secondary, // Using secondary for sort button
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onSecondary,
                         elevation: 5,
                       ),
                     ),
                   ),
                 ),
                 Expanded(
-                  // Expanded to make the ListView take available space
                   child: _configs.isEmpty
                       ? Center(
                           child: Text(
                             'هیچ سروری برای نمایش وجود ندارد.',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey.shade700,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyMedium?.color,
+                                ),
                           ),
                         )
                       : ListView.builder(
@@ -227,7 +239,9 @@ class _ServerListScreenState extends State<ServerListScreen> {
                                   Icons.vpn_lock,
                                   color: isSelected
                                       ? Theme.of(context).colorScheme.secondary
-                                      : Colors.blueGrey,
+                                      : Theme.of(
+                                          context,
+                                        ).textTheme.bodyMedium?.color,
                                   size: 30,
                                 ),
                                 title: Text(
@@ -236,24 +250,38 @@ class _ServerListScreenState extends State<ServerListScreen> {
                                       ?.copyWith(
                                         fontWeight: FontWeight.bold,
                                         color: isSelected
-                                            ? Colors.blueAccent.shade700
-                                            : Colors.black87,
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
+                                            : Theme.of(
+                                                context,
+                                              ).textTheme.titleMedium?.color,
                                       ),
                                 ),
                                 subtitle: Text(
                                   '${config.protocol?.toUpperCase() ?? 'نامشخص'} - ${config.server}:${config.port}',
                                   style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: Colors.grey.shade600),
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.color,
+                                      ),
                                 ),
                                 trailing: SizedBox(
                                   width: 100,
                                   child: isPinging
-                                      ? const Center(
+                                      ? Center(
                                           child: SizedBox(
                                             width: 20,
                                             height: 20,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2.5,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary,
+                                                  ),
                                             ),
                                           ),
                                         )
@@ -284,7 +312,6 @@ class _ServerListScreenState extends State<ServerListScreen> {
                                         ),
                                 ),
                                 onTap: () {
-                                  // با کلیک روی سرور، انتخاب شده و به صفحه قبل بازگردانده می‌شود
                                   Navigator.pop(context, config);
                                 },
                               ),
@@ -297,17 +324,25 @@ class _ServerListScreenState extends State<ServerListScreen> {
           ),
           if (_isSortingAndPinging)
             Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(
+              color: Theme.of(context).colorScheme.surface.withOpacity(0.7),
+              child: Center(
                 child: Card(
+                  color: Theme.of(context).cardTheme.color,
                   child: Padding(
-                    padding: EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.all(20.0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(),
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
                         SizedBox(height: 16),
-                        Text("در حال تست و مرتب‌سازی سرورها..."),
+                        Text(
+                          "در حال تست و مرتب‌سازی سرورها...",
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       ],
                     ),
                   ),
