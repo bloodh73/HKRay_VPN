@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:HKRay_vpn/screens/server_list_screen.dart';
+import 'package:hkray_vpn/screens/server_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;
@@ -672,6 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        elevation: 0,
         title: Text(
           _username,
           style: Theme.of(context).appBarTheme.titleTextStyle,
