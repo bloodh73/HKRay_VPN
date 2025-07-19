@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:hkray_vpn/screens/server_list_screen.dart';
+import 'package:HKRay_vpn/screens/server_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;

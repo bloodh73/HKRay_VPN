@@ -1,6 +1,6 @@
-import 'package:hkray_vpn/screens/splash_screen.dart';
-import 'package:hkray_vpn/services/v2ray_service.dart';
-import 'package:hkray_vpn/services/theme_notifier.dart'; // Import ThemeNotifier
+import 'package:HKRay_vpn/screens/splash_screen.dart';
+import 'package:HKRay_vpn/services/v2ray_service.dart';
+import 'package:HKRay_vpn/services/theme_notifier.dart'; // Import ThemeNotifier
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
