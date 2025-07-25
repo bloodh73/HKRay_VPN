@@ -9,10 +9,10 @@ class ServerListScreen extends StatefulWidget {
   final V2RayConfig? currentSelectedConfig;
 
   const ServerListScreen({
-    Key? key,
+    super.key,
     required this.configs,
     this.currentSelectedConfig,
-  }) : super(key: key);
+  });
 
   @override
   State<ServerListScreen> createState() => _ServerListScreenState();

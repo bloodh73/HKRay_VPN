@@ -146,7 +146,7 @@ class V2RayService with ChangeNotifier {
       // شروع V2Ray با تنظیمات نوتیفیکیشن
       await _v2ray.initializeV2Ray(
         notificationIconResourceType: "mipmap",
-        notificationIconResourceName: "ic_launcher",
+        notificationIconResourceName: "hkray",
         // Removed unsupported parameters: notificationActionResourceName and notificationActionResourceType
       );
       _isInitialized = true;
