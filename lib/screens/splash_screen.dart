@@ -7,7 +7,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/v2ray_config.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
-import 'package:loading_indicator/loading_indicator.dart';
 import 'package:package_info_plus/package_info_plus.dart'; // Import for package info
 import 'package:url_launcher/url_launcher.dart'; // Import for launching URLs
 import 'package:flutter/services.dart'; // For Clipboard
@@ -437,86 +436,162 @@ class _SplashScreenState extends State<SplashScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user_id');
-    await prefs.remove('username');
-    // ignore: use_build_context_synchronously
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: _hasError
                 ? [
                     Theme.of(context).colorScheme.error,
-                    Theme.of(context).colorScheme.error,
+                    Theme.of(context).colorScheme.error.withOpacity(0.8),
                   ]
                 : [
                     Theme.of(context).primaryColor,
-                    Theme.of(context).colorScheme.secondary,
+                    Theme.of(context).primaryColorDark,
                   ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
           ),
         ),
         child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (_hasError)
-                  const Icon(Icons.error, color: Colors.white, size: 60)
-                else
-                  SizedBox(
-                    width: 60,
-                    height: 60,
-                    child: LoadingIndicator(
-                      indicatorType: Indicator.ballSpinFadeLoader,
-                      colors: [Colors.white],
-                      strokeWidth: 3,
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                Text(
-                  _hasError ? _errorMessage : _statusMessage,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                ),
-                if (_hasError) ...[
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _retryInitialization,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('تلاش مجدد'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: _logout,
-                    icon: const Icon(Icons.logout),
-                    label: const Text('خروج'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
-              ],
+          child: _hasError ? _buildErrorWidget() : _buildLoadingWidget(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Container(
+      margin: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.all(20.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red, size: 64),
+          const SizedBox(height: 20),
+          const Text(
+            'خطا در اتصال به سرور',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              _errorMessage,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 15, color: Colors.red),
             ),
           ),
-        ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _retryInitialization,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30.0),
+              ),
+            ),
+            icon: const Icon(Icons.refresh, size: 20),
+            label: const Text('تلاش مجدد', style: TextStyle(fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingWidget() {
+    return Container(
+      margin: const EdgeInsets.all(32.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // App Logo with animation
+          Container(
+            width: 120,
+            height: 120,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: Image.asset(
+                'assets/images/app_icon.png',
+                width: 100,
+                height: 100,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          const SizedBox(height: 40),
+
+          // Status Message
+          Text(
+            _statusMessage,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 30),
+
+          // Animated Progress Bar
+          Container(
+            height: 6,
+            margin: const EdgeInsets.symmetric(horizontal: 40),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: 1),
+              duration: const Duration(seconds: 2),
+              builder: (context, value, _) {
+                return LinearProgressIndicator(
+                  value: value,
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Colors.white.withOpacity(0.8),
+                  ),
+                  minHeight: 6,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // App Version
+          Text(
+            'نسخه $_currentAppVersion',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }

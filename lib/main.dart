@@ -34,6 +34,13 @@ class _MyAppState extends State<MyApp> {
       child: Consumer<ThemeNotifier>(
         // Use Consumer to listen to ThemeNotifier
         builder: (context, themeNotifier, child) {
+          // Set default theme to dark if not already set
+          if (themeNotifier.themeMode == ThemeMode.system) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              themeNotifier.setThemeMode(ThemeMode.dark);
+            });
+          }
+
           return MaterialApp(
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
@@ -42,7 +49,7 @@ class _MyAppState extends State<MyApp> {
             ],
             supportedLocales: const [Locale('fa', ''), Locale('en', '')],
             locale: const Locale('fa', ''),
-
+            themeMode: themeNotifier.themeMode,
             debugShowCheckedModeBanner: false,
 
             // Light Theme
@@ -380,9 +387,6 @@ class _MyAppState extends State<MyApp> {
                 ),
               ),
             ),
-
-            themeMode: themeNotifier
-                .themeMode, // Use the theme mode from ThemeNotifier
             home: const SplashScreen(),
           );
         },

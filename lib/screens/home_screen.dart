@@ -475,20 +475,34 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _selectServer() async {
-    if (_v2rayService.isConnected) {
+    if (_remainingVolumeMB <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'برای تغییر سرور، ابتدا اتصال را قطع کنید',
+        SnackBar(
+          content: const Text(
+            'اشتراک شما به پایان رسیده است. لطفاً اشتراک خود را تمدید کنید.',
             textAlign: TextAlign.center,
             style: TextStyle(fontFamily: 'Vazirmatn'),
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
           behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.all(12),
+          margin: const EdgeInsets.all(10),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderRadius: BorderRadius.circular(10),
           ),
+        ),
+      );
+      return;
+    }
+
+    if (_currentStatus.state == 'CONNECTED') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'لطفاً ابتدا اتصال را قطع کنید.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Vazirmatn'),
+          ),
+          backgroundColor: Colors.orangeAccent,
         ),
       );
       return;
@@ -690,11 +704,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _username,
-          style: Theme.of(context).appBarTheme.titleTextStyle,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _username,
+              style: Theme.of(context).appBarTheme.titleTextStyle,
+            ),
+          ],
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.refresh,
+              color: Theme.of(context).appBarTheme.foregroundColor,
+            ),
+            onPressed: _fetchUserDetails,
+            tooltip: 'به‌روزرسانی اطلاعات کاربر',
+          ),
+        ],
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -707,16 +737,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.refresh,
-              color: Theme.of(context).appBarTheme.foregroundColor,
-            ),
-            onPressed: _fetchUserDetails,
-            tooltip: 'به‌روزرسانی اطلاعات کاربر',
-          ),
-        ],
       ),
       drawer: Drawer(
         child: Container(
@@ -844,6 +864,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        color: Theme.of(context).colorScheme.error,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const Divider(color: Colors.white70),
               _buildDrawerItem(
                 icon: Icons.refresh,
@@ -859,6 +907,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: Icons.logout,
                 title: 'خروج',
                 onTap: _logout,
+              ),
+              const Divider(color: Colors.white70),
+              SizedBox(height: 10),
+              Text(
+                textAlign: TextAlign.center,
+                'Hamed Karimi',
+                style: TextStyle(fontFamily: 'Vazirmatn'),
               ),
             ],
           ),
@@ -994,49 +1049,83 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
-                  gradient: LinearGradient(
-                    colors: [
-                      Theme.of(context).primaryColor,
-                      Theme.of(context).colorScheme.secondary,
+              if (_remainingVolumeMB <= 0)
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.error,
+                      width: 1.5,
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        color: Theme.of(context).colorScheme.error,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'اشتراک شما به پایان رسیده است',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Theme.of(context).colorScheme.error,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withOpacity(0.6),
-                      blurRadius: 25,
-                      spreadRadius: 8,
-                      offset: const Offset(0, 8),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    gradient: LinearGradient(
+                      colors: [
+                        Theme.of(context).primaryColor,
+                        Theme.of(context).colorScheme.secondary,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  ],
-                ),
-                child: ElevatedButton.icon(
-                  onPressed: _selectServer,
-                  icon: const Icon(Icons.list, size: 24),
-                  label: Text(
-                    'سرور انتخاب شده: ${_selectedConfig?.remarks ?? 'هیچ سروری انتخاب نشده'}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withOpacity(0.6),
+                        blurRadius: 25,
+                        spreadRadius: 8,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    shadowColor: Colors.transparent,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+                  child: ElevatedButton.icon(
+                    onPressed: _selectServer,
+                    icon: const Icon(Icons.list, size: 24),
+                    label: Text(
+                      'سرور انتخاب شده: ${_selectedConfig?.remarks ?? 'هیچ سروری انتخاب نشده'}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                     ),
                   ),
                 ),
-              ),
               SizedBox(height: 20),
               Card(
                 elevation: 8,
@@ -1110,17 +1199,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 margin: const EdgeInsets.only(bottom: 20),
+                color: _remainingVolumeMB <= 0
+                    ? Theme.of(context).colorScheme.error.withOpacity(0.1)
+                    : null,
                 child: Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'آمار مصرف:',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            'آمار مصرف:',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: _remainingVolumeMB <= 0
+                                      ? Theme.of(context).colorScheme.error
+                                      : Theme.of(context).colorScheme.primary,
+                                ),
+                          ),
+                          if (_remainingVolumeMB <= 0) ...[
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ],
+                        ],
                       ),
                       const Divider(height: 20, thickness: 1.5),
                       _buildInfoRow(
@@ -1350,7 +1456,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String value, {
     required IconData icon,
     Color? iconColor,
-    Color? valueColor, // NEW: Optional color for the value text
+    Color? valueColor,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1380,11 +1486,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color:
-                  valueColor ??
-                  Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.color, // Use valueColor if provided
+              color: valueColor ?? Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
         ],
