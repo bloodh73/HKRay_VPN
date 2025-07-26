@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:loading_indicator/loading_indicator.dart';
 import '../models/v2ray_config.dart';
 import '../services/v2ray_service.dart';
 import 'dart:async';
@@ -324,28 +325,114 @@ class _ServerListScreenState extends State<ServerListScreen> {
           ),
           if (_isSortingAndPinging)
             Container(
-              color: Theme.of(context).colorScheme.surface.withOpacity(0.7),
+              color: Colors.black54,
               child: Center(
-                child: Card(
-                  color: Theme.of(context).cardTheme.color,
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Theme.of(context).colorScheme.primary,
+                child: TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 300),
+                  tween: Tween(begin: 0.9, end: 1.0),
+                  curve: Curves.easeOutBack,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Card(
+                        elevation: 8,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 24,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Animated loading indicator
+                              Container(
+                                width: 60,
+                                height: 60,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: LoadingIndicator(
+                                  indicatorType: Indicator.ballPulse,
+                                  colors: [
+                                    Theme.of(context).colorScheme.primary,
+                                  ],
+                                  strokeWidth: 2.5,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              // Title with fade animation
+                              TweenAnimationBuilder<double>(
+                                duration: const Duration(milliseconds: 500),
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                builder: (context, value, child) {
+                                  return Opacity(
+                                    opacity: value,
+                                    child: Transform.translate(
+                                      offset: Offset(0, 10 * (1 - value)),
+                                      child: Text(
+                                        'در حال تست و بهینه‌سازی سرورها',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface,
+                                            ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              // Subtitle with delayed animation
+                              TweenAnimationBuilder<double>(
+                                duration: const Duration(milliseconds: 500),
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                builder: (context, value, child) {
+                                  // Add a small delay using a threshold
+                                  final delayedValue = value < 0.2
+                                      ? 0.0
+                                      : (value - 0.2) / 0.8;
+                                  return Opacity(
+                                    opacity: delayedValue,
+                                    child: Transform.translate(
+                                      offset: Offset(
+                                        0,
+                                        10 * (1 - delayedValue),
+                                      ),
+                                      child: Text(
+                                        'لطفاً شکیبا باشید...',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withOpacity(0.7),
+                                            ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
-                        SizedBox(height: 16),
-                        Text(
-                          "در حال تست و مرتب‌سازی سرورها...",
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),

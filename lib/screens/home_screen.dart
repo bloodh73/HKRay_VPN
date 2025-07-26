@@ -51,6 +51,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final String _apiBaseUrl = 'https://blizzardping.ir/api.php';
 
+  DateTime? _connectionTime;
+
   @override
   void initState() {
     super.initState();
@@ -325,6 +327,107 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Show a beautiful snackbar at the top of the screen
+  void _showTopSnackBar(
+    BuildContext context, {
+    required String message,
+    required Color backgroundColor,
+    IconData? icon,
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+
+    // Create a function to remove the overlay
+    void removeOverlay() {
+      if (overlayEntry.mounted) {
+        overlayEntry.remove();
+      }
+    }
+
+    overlayEntry = OverlayEntry(
+      builder: (context) => TweenAnimationBuilder<double>(
+        duration: const Duration(milliseconds: 300),
+        tween: Tween(begin: 0.0, end: 1.0),
+        builder: (context, value, child) {
+          return Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            left: 16,
+            right: 16,
+            child: GestureDetector(
+              onVerticalDragUpdate: (details) {
+                if (details.primaryDelta! < -5) {
+                  removeOverlay();
+                }
+              },
+              child: Transform.translate(
+                offset: Offset(0, (1 - value) * -50),
+                child: Opacity(
+                  opacity: value,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: backgroundColor,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          if (icon != null) ...[
+                            Icon(icon, color: Colors.white, size: 24),
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(
+                            child: Text(
+                              message,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontFamily: 'Vazirmatn',
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                            onPressed: removeOverlay,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    // Insert the overlay
+    overlay.insert(overlayEntry);
+
+    // Auto dismiss after duration
+    Future.delayed(duration, removeOverlay);
+  }
+
   @override
   void dispose() {
     _statusSubscription?.cancel();
@@ -472,38 +575,44 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
+
+    if (_selectedConfig == null) {
+      _showTopSnackBar(
+        context,
+        message: 'لطفاً ابتدا یک سرور انتخاب کنید.',
+        backgroundColor: Theme.of(context).colorScheme.error,
+        icon: Icons.error_outline,
+      );
+      return;
+    }
+
+    if (_currentStatus.state == 'DISCONNECTED') {
+      // Store connection time when connecting
+      _connectionTime = DateTime.now();
+    } else if (_currentStatus.state == 'CONNECTED') {
+      // Clear connection time when disconnecting
+      _connectionTime = null;
+    }
   }
 
   Future<void> _selectServer() async {
     if (_remainingVolumeMB <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
+      _showTopSnackBar(
+        context,
+        message:
             'اشتراک شما به پایان رسیده است. لطفاً اشتراک خود را تمدید کنید.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontFamily: 'Vazirmatn'),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        icon: Icons.error_outline,
       );
       return;
     }
 
     if (_currentStatus.state == 'CONNECTED') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'لطفاً ابتدا اتصال را قطع کنید.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontFamily: 'Vazirmatn'),
-          ),
-          backgroundColor: Colors.orangeAccent,
-        ),
+      _showTopSnackBar(
+        context,
+        message: 'لطفاً ابتدا اتصال را قطع کنید.',
+        backgroundColor: Colors.red,
+        icon: Icons.warning_amber_rounded,
       );
       return;
     }
@@ -511,32 +620,106 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black54,
       builder: (BuildContext context) {
         return Center(
-          child: Card(
-            color: Theme.of(context).cardTheme.color,
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: LoadingIndicator(
-                      indicatorType: Indicator.ballPulse,
-                      colors: [Theme.of(context).colorScheme.primary],
-                      strokeWidth: 2,
+          child: TweenAnimationBuilder<double>(
+            duration: const Duration(milliseconds: 300),
+            tween: Tween(begin: 0.9, end: 1.0),
+            curve: Curves.easeOutBack,
+            builder: (context, value, child) {
+              return Transform.scale(
+                scale: value,
+                child: Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 24,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Animated loading indicator
+                        Container(
+                          width: 60,
+                          height: 60,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: LoadingIndicator(
+                            indicatorType: Indicator.ballPulse,
+                            colors: [Theme.of(context).colorScheme.primary],
+                            strokeWidth: 2.5,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        // Title with fade animation
+                        TweenAnimationBuilder<double>(
+                          duration: const Duration(milliseconds: 500),
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          builder: (context, value, child) {
+                            return Opacity(
+                              opacity: value,
+                              child: Transform.translate(
+                                offset: Offset(0, 10 * (1 - value)),
+                                child: Text(
+                                  'در حال دریافت سرورها',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
+                                      ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        // Subtitle with delayed animation
+                        TweenAnimationBuilder<double>(
+                          duration: const Duration(milliseconds: 500),
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          builder: (context, value, child) {
+                            // Add a small delay using a threshold
+                            final delayedValue = value < 0.2
+                                ? 0.0
+                                : (value - 0.2) / 0.8;
+                            return Opacity(
+                              opacity: delayedValue,
+                              child: Transform.translate(
+                                offset: Offset(0, 10 * (1 - delayedValue)),
+                                child: Text(
+                                  'لطفاً شکیبا باشید...',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface
+                                            .withOpacity(0.7),
+                                      ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                  SizedBox(height: 16),
-                  Text(
-                    "در حال دریافت سرورها...",
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         );
       },
@@ -716,13 +899,36 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: Icon(
-              Icons.refresh,
-              color: Theme.of(context).appBarTheme.foregroundColor,
+          Tooltip(
+            message: 'به‌روزرسانی اطلاعات کاربر',
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            margin: const EdgeInsets.only(right: 8),
+            verticalOffset: 10,
+            preferBelow: false,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            onPressed: _fetchUserDetails,
-            tooltip: 'به‌روزرسانی اطلاعات کاربر',
+            textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontFamily: 'Vazirmatn',
+            ),
+            waitDuration: const Duration(milliseconds: 300),
+            showDuration: const Duration(seconds: 2),
+            child: IconButton(
+              icon: Icon(
+                Icons.refresh,
+                color: Theme.of(context).appBarTheme.foregroundColor,
+              ),
+              onPressed: _fetchUserDetails,
+            ),
           ),
         ],
         flexibleSpace: Container(
@@ -920,6 +1126,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: Container(
+        height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -935,87 +1142,165 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              GestureDetector(
-                onTap: _connectDisconnect,
-                child: Consumer<V2RayService>(
-                  builder: (context, v2rayService, child) {
-                    _currentStatus = v2rayService.status;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeInOut,
-                      width: 150,
-                      height: 150,
-                      margin: const EdgeInsets.symmetric(vertical: 20),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: _currentStatus.state == 'CONNECTED'
-                              ? [Colors.green.shade600, Colors.green.shade400]
-                              : [
-                                  Theme.of(context).primaryColor,
-                                  Theme.of(context).colorScheme.secondary,
-                                ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _currentStatus.state == 'CONNECTED'
-                                ? Colors.green.shade300.withOpacity(0.6)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withOpacity(0.6),
-                            blurRadius: 25,
-                            spreadRadius: 8,
-                            offset: const Offset(0, 8),
+              Consumer<V2RayService>(
+                builder: (context, v2rayService, child) {
+                  _currentStatus = v2rayService.status;
+                  final isConnected = _currentStatus.state == 'CONNECTED';
+                  final isConnecting = _currentStatus.state == 'CONNECTING';
+
+                  return TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 500),
+                    tween: Tween(begin: 0.95, end: 1.0),
+                    curve: Curves.easeOutBack,
+                    child: GestureDetector(
+                      onTap: _connectDisconnect,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeInOut,
+                        width: 180,
+                        height: 180,
+                        margin: const EdgeInsets.symmetric(vertical: 24),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: isConnected
+                                ? [Colors.green.shade600, Colors.green.shade400]
+                                : isConnecting
+                                ? [
+                                    Colors.orange.shade600,
+                                    Colors.orange.shade400,
+                                  ]
+                                : [
+                                    Theme.of(context).primaryColor,
+                                    Theme.of(context).colorScheme.secondary,
+                                  ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                        ],
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.8),
-                          width: 5,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _currentStatus.state == 'CONNECTED'
-                                ? Icons.vpn_key
-                                : Icons.vpn_key_off,
-                            color: Colors.white,
-                            size: 50,
-                          ),
-                          const SizedBox(height: 15),
-                          Text(
-                            _currentStatus.state == 'CONNECTED'
-                                ? 'متصل'
-                                : _currentStatus.state == 'CONNECTING'
-                                ? 'در حال اتصال...'
-                                : 'قطع',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                          boxShadow: [
+                            BoxShadow(
+                              color: isConnected
+                                  ? Colors.green.shade300.withOpacity(0.6)
+                                  : isConnecting
+                                  ? Colors.orange.shade300.withOpacity(0.6)
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withOpacity(0.6),
+                              blurRadius: 25,
+                              spreadRadius: 8,
+                              offset: const Offset(0, 8),
                             ),
+                          ],
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.9),
+                            width: 6,
                           ),
-                          if (_currentStatus.state == 'CONNECTING')
-                            const Padding(
-                              padding: EdgeInsets.only(top: 10.0),
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: LoadingIndicator(
-                                  indicatorType: Indicator.ballSpinFadeLoader,
-                                  colors: [Colors.white],
-                                  strokeWidth: 2,
-                                ),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Pulsing effect when connected
+                            if (isConnected)
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 1.0, end: 1.2),
+                                duration: const Duration(seconds: 2),
+                                curve: Curves.easeInOut,
+                                builder: (context, value, child) {
+                                  return Container(
+                                    width: 180 * value,
+                                    height: 180 * value,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.green.withOpacity(0.1),
+                                    ),
+                                  );
+                                },
                               ),
+                            // Main content
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Animated icon
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 400),
+                                  transitionBuilder: (child, animation) {
+                                    return ScaleTransition(
+                                      scale: animation,
+                                      child: child,
+                                    );
+                                  },
+                                  child: isConnected
+                                      ? Icon(
+                                          Icons.vpn_key_rounded,
+                                          color: Colors.white,
+                                          size: 54,
+                                          key: const ValueKey('connected'),
+                                        )
+                                      : isConnecting
+                                      ? const SizedBox(
+                                          width: 54,
+                                          height: 54,
+                                          child: LoadingIndicator(
+                                            indicatorType:
+                                                Indicator.ballSpinFadeLoader,
+                                            colors: [Colors.white],
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : Icon(
+                                          Icons.vpn_key_off_rounded,
+                                          color: Colors.white.withOpacity(0.9),
+                                          size: 54,
+                                          key: const ValueKey('disconnected'),
+                                        ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Status text
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 300),
+                                  child: Text(
+                                    isConnected
+                                        ? 'اتصال برقرار است'
+                                        : isConnecting
+                                        ? 'در حال اتصال...'
+                                        : 'اتصال قطع است',
+                                    key: ValueKey(_currentStatus.state),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'Vazirmatn',
+                                    ),
+                                  ),
+                                ),
+                                // Connection time when connected
+                                if (isConnected && _connectionTime != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4.0),
+                                    child: Text(
+                                      _formatDuration(
+                                        DateTime.now().difference(
+                                          _connectionTime!,
+                                        ),
+                                      ),
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.9),
+                                        fontSize: 14,
+                                        fontFamily: 'Vazirmatn',
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
-                        ],
+                          ],
+                        ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                    builder: (context, value, child) {
+                      return Transform.scale(scale: value, child: child);
+                    },
+                  );
+                },
               ),
 
               if (_errorMessage != null)
@@ -1083,208 +1368,429 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 )
               else
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(15),
-                    gradient: LinearGradient(
-                      colors: [
-                        Theme.of(context).primaryColor,
-                        Theme.of(context).colorScheme.secondary,
+                TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 400),
+                  tween: Tween(begin: 0.95, end: 1.0),
+                  curve: Curves.easeOutBack,
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).primaryColor.withOpacity(0.9),
+                          Theme.of(
+                            context,
+                          ).colorScheme.secondary.withOpacity(0.9),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.3),
+                          blurRadius: 20,
+                          spreadRadius: 1,
+                          offset: const Offset(0, 8),
+                        ),
                       ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.primary.withOpacity(0.6),
-                        blurRadius: 25,
-                        spreadRadius: 8,
-                        offset: const Offset(0, 8),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        onTap: _selectServer,
+                        borderRadius: BorderRadius.circular(18),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 18,
+                            horizontal: 20,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.dns_rounded,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'سرور انتخاب شده',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: Colors.white.withOpacity(
+                                              0.9,
+                                            ),
+                                            fontSize: 14,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _selectedConfig?.remarks ??
+                                          'هیچ سروری انتخاب نشده',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                color: Colors.white70,
+                                size: 18,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                  child: ElevatedButton.icon(
-                    onPressed: _selectServer,
-                    icon: const Icon(Icons.list, size: 24),
-                    label: Text(
-                      'سرور انتخاب شده: ${_selectedConfig?.remarks ?? 'هیچ سروری انتخاب نشده'}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      shadowColor: Colors.transparent,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
                     ),
                   ),
+                  builder: (context, value, child) {
+                    return Transform.scale(scale: value, child: child);
+                  },
                 ),
               SizedBox(height: 20),
-              Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                margin: const EdgeInsets.only(bottom: 20),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Consumer<V2RayService>(
-                    builder: (context, v2rayService, child) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'وضعیت اتصال:',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                          ),
-                          const Divider(height: 20, thickness: 1.5),
-                          _buildInfoRow(
-                            'وضعیت:',
-                            v2rayService.status.state,
-                            icon: Icons.info_outline,
-                            iconColor: v2rayService.status.state == 'CONNECTED'
-                                ? Colors.green
-                                : Colors.red,
-                          ),
-                          _buildInfoRow(
-                            'سرعت دانلود:',
-                            '${v2rayService.formatBytes(v2rayService.downloadSpeed)}/s',
-                            icon: Icons.arrow_downward,
-                            iconColor: Theme.of(context).colorScheme.secondary,
-                          ),
-                          _buildInfoRow(
-                            'سرعت آپلود:',
-                            '${v2rayService.formatBytes(v2rayService.uploadSpeed)}/s',
-                            icon: Icons.arrow_upward,
-                            iconColor: Theme.of(context).colorScheme.secondary,
-                          ),
-                          const Divider(),
-                          _buildInfoRow(
-                            'دانلود کلی:',
-                            v2rayService.formatBytes(
-                              v2rayService.totalDownloaded,
-                            ),
-                            icon: Icons.cloud_download,
-                            iconColor: Theme.of(context).colorScheme.primary,
-                          ),
-                          _buildInfoRow(
-                            'آپلود کلی:',
-                            v2rayService.formatBytes(
-                              v2rayService.totalUploaded,
-                            ),
-                            icon: Icons.cloud_upload,
-                            iconColor: Theme.of(context).colorScheme.primary,
-                          ),
+              TweenAnimationBuilder<double>(
+                duration: const Duration(milliseconds: 500),
+                tween: Tween(begin: 0.95, end: 1.0),
+                curve: Curves.easeOutBack,
+                child: Card(
+                  elevation: 12,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  margin: const EdgeInsets.only(bottom: 20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.surface,
+                          Theme.of(
+                            context,
+                          ).colorScheme.surface.withOpacity(0.9),
                         ],
-                      );
-                    },
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Consumer<V2RayService>(
+                        builder: (context, v2rayService, child) {
+                          final isConnected =
+                              v2rayService.status.state == 'CONNECTED';
+                          final isConnecting =
+                              v2rayService.status.state == 'CONNECTING';
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isConnected
+                                          ? Colors.green.withOpacity(0.1)
+                                          : isConnecting
+                                          ? Colors.orange.withOpacity(0.1)
+                                          : Colors.red.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      isConnected
+                                          ? Icons.check_circle_outline
+                                          : isConnecting
+                                          ? Icons.sync
+                                          : Icons.error_outline,
+                                      color: isConnected
+                                          ? Colors.green
+                                          : isConnecting
+                                          ? Colors.orange
+                                          : Colors.red,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'وضعیت اتصال',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          isConnected
+                                              ? 'به شبکه متصل هستید'
+                                              : isConnecting
+                                              ? 'در حال اتصال...'
+                                              : 'اتصال برقرار نیست',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withOpacity(0.7),
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isConnected
+                                          ? Colors.green.withOpacity(0.1)
+                                          : isConnecting
+                                          ? Colors.orange.withOpacity(0.1)
+                                          : Colors.red.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      isConnected
+                                          ? 'فعال'
+                                          : isConnecting
+                                          ? 'در حال اتصال'
+                                          : 'غیرفعال',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            color: isConnected
+                                                ? Colors.green
+                                                : isConnecting
+                                                ? Colors.orange
+                                                : Colors.red,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 16),
+                              const Divider(height: 1, thickness: 1.5),
+                              const SizedBox(height: 16),
+
+                              // Connection Stats
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 400),
+                                child: isConnected || isConnecting
+                                    ? Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              _buildStatItem(
+                                                context,
+                                                'سرعت دانلود',
+                                                '${v2rayService.formatBytes(v2rayService.downloadSpeed)}/ثانیه',
+                                                Icons.arrow_downward,
+                                                Colors.blue,
+                                              ),
+                                              _buildStatItem(
+                                                context,
+                                                'سرعت آپلود',
+                                                '${v2rayService.formatBytes(v2rayService.uploadSpeed)}/ثانیه',
+                                                Icons.arrow_upward,
+                                                Colors.purple,
+                                              ),
+                                            ],
+                                          ),
+
+                                          SizedBox(height: 16),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              _buildStatItem(
+                                                context,
+                                                'کل دانلود',
+                                                v2rayService.formatBytes(
+                                                  v2rayService.totalDownloaded,
+                                                ),
+                                                Icons.cloud_download,
+                                                Colors.green,
+                                              ),
+                                              _buildStatItem(
+                                                context,
+                                                'کل آپلود',
+                                                v2rayService.formatBytes(
+                                                  v2rayService.totalUploaded,
+                                                ),
+                                                Icons.cloud_upload,
+                                                Colors.orange,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      )
+                                    : Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 8.0,
+                                        ),
+                                        child: Text(
+                                          'برای مشاهده آمار اتصال، به یک سرور متصل شوید',
+                                          textAlign: TextAlign.center,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withOpacity(0.6),
+                                              ),
+                                        ),
+                                      ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
+                builder: (context, value, child) {
+                  return Transform.scale(scale: value, child: child);
+                },
               ),
 
-              Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                margin: const EdgeInsets.only(bottom: 20),
-                color: _remainingVolumeMB <= 0
-                    ? Theme.of(context).colorScheme.error.withOpacity(0.1)
-                    : null,
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'آمار مصرف:',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: _remainingVolumeMB <= 0
-                                      ? Theme.of(context).colorScheme.error
-                                      : Theme.of(context).colorScheme.primary,
-                                ),
-                          ),
-                          if (_remainingVolumeMB <= 0) ...[
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.warning_amber_rounded,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ],
-                        ],
-                      ),
-                      const Divider(height: 20, thickness: 1.5),
-                      _buildInfoRow(
-                        'حجم کلی:',
-                        '${(_totalVolumeMB / 1024).toStringAsFixed(2)} GB',
-                        icon: Icons.storage,
-                        iconColor: Theme.of(context).colorScheme.secondary,
-                      ),
-                      _buildInfoRow(
-                        'حجم مصرفی:',
-                        '${(_usedVolumeMB / 1024).toStringAsFixed(2)} GB',
-                        icon: Icons.pie_chart,
-                        iconColor: Theme.of(context).colorScheme.error,
-                      ),
-                      // NEW: Conditional color for Remaining Volume
-                      _buildInfoRow(
-                        'حجم باقی مانده:',
-                        '${(_remainingVolumeMB / 1024).toStringAsFixed(2)} GB',
-                        icon: Icons.cloud_queue,
-                        iconColor: _remainingVolumeMB <= 0
-                            ? Theme.of(context)
-                                  .colorScheme
-                                  .error // Red if 0 or less
-                            : Theme.of(
-                                context,
-                              ).colorScheme.secondary, // Normal color otherwise
-                        valueColor: _remainingVolumeMB <= 0
-                            ? Theme.of(context)
-                                  .colorScheme
-                                  .error // Red text if 0 or less
-                            : Theme.of(
-                                context,
-                              ).textTheme.bodyLarge?.color, // Normal text color
-                      ),
-                      // NEW: Conditional color for Remaining Days
-                      _buildInfoRow(
-                        'روزهای باقی مانده:',
-                        '$_remainingDays روز',
-                        icon: Icons.hourglass_empty,
-                        iconColor: _remainingDays <= 0
-                            ? Theme.of(context)
-                                  .colorScheme
-                                  .error // Red if 0 or less
-                            : Theme.of(
-                                context,
-                              ).colorScheme.secondary, // Normal color otherwise
-                        valueColor: _remainingDays <= 0
-                            ? Theme.of(context)
-                                  .colorScheme
-                                  .error // Red text if 0 or less
-                            : Theme.of(
-                                context,
-                              ).textTheme.bodyLarge?.color, // Normal text color
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              // Card(
+              //   elevation: 8,
+              //   shape: RoundedRectangleBorder(
+              //     borderRadius: BorderRadius.circular(20),
+              //   ),
+              //   margin: const EdgeInsets.only(bottom: 20),
+              //   color: _remainingVolumeMB <= 0
+              //       ? Theme.of(context).colorScheme.error.withOpacity(0.1)
+              //       : null,
+              //   child: Padding(
+              //     padding: const EdgeInsets.all(20.0),
+              //     child: Column(
+              //       crossAxisAlignment: CrossAxisAlignment.start,
+              //       children: [
+              //         Row(
+              //           children: [
+              //             Text(
+              //               'آمار مصرف:',
+              //               style: Theme.of(context).textTheme.titleLarge
+              //                   ?.copyWith(
+              //                     fontWeight: FontWeight.bold,
+              //                     color: _remainingVolumeMB <= 0
+              //                         ? Theme.of(context).colorScheme.error
+              //                         : Theme.of(context).colorScheme.primary,
+              //                   ),
+              //             ),
+              //             if (_remainingVolumeMB <= 0) ...[
+              //               const SizedBox(width: 8),
+              //               Icon(
+              //                 Icons.warning_amber_rounded,
+              //                 color: Theme.of(context).colorScheme.error,
+              //               ),
+              //             ],
+              //           ],
+              //         ),
+              //         const Divider(height: 20, thickness: 1.5),
+              //         _buildInfoRow(
+              //           'حجم کلی:',
+              //           '${(_totalVolumeMB / 1024).toStringAsFixed(2)} GB',
+              //           icon: Icons.storage,
+              //           iconColor: Theme.of(context).colorScheme.secondary,
+              //         ),
+              //         _buildInfoRow(
+              //           'حجم مصرفی:',
+              //           '${(_usedVolumeMB / 1024).toStringAsFixed(2)} GB',
+              //           icon: Icons.pie_chart,
+              //           iconColor: Theme.of(context).colorScheme.error,
+              //         ),
+              //         // NEW: Conditional color for Remaining Volume
+              //         _buildInfoRow(
+              //           'حجم باقی مانده:',
+              //           '${(_remainingVolumeMB / 1024).toStringAsFixed(2)} GB',
+              //           icon: Icons.cloud_queue,
+              //           iconColor: _remainingVolumeMB <= 0
+              //               ? Theme.of(context)
+              //                     .colorScheme
+              //                     .error // Red if 0 or less
+              //               : Theme.of(
+              //                   context,
+              //                 ).colorScheme.secondary, // Normal color otherwise
+              //           valueColor: _remainingVolumeMB <= 0
+              //               ? Theme.of(context)
+              //                     .colorScheme
+              //                     .error // Red text if 0 or less
+              //               : Theme.of(
+              //                   context,
+              //                 ).textTheme.bodyLarge?.color, // Normal text color
+              //         ),
+              //         // NEW: Conditional color for Remaining Days
+              //         _buildInfoRow(
+              //           'روزهای باقی مانده:',
+              //           '$_remainingDays روز',
+              //           icon: Icons.hourglass_empty,
+              //           iconColor: _remainingDays <= 0
+              //               ? Theme.of(context)
+              //                     .colorScheme
+              //                     .error // Red if 0 or less
+              //               : Theme.of(
+              //                   context,
+              //                 ).colorScheme.secondary, // Normal color otherwise
+              //           valueColor: _remainingDays <= 0
+              //               ? Theme.of(context)
+              //                     .colorScheme
+              //                     .error // Red text if 0 or less
+              //               : Theme.of(
+              //                   context,
+              //                 ).textTheme.bodyLarge?.color, // Normal text color
+              //         ),
+              //       ],
+              //     ),
+              //   ),
+              // ),
             ],
           ),
         ),
@@ -1451,47 +1957,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildInfoRow(
-    String label,
-    String value, {
-    required IconData icon,
-    Color? iconColor,
-    Color? valueColor,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(
-                icon,
-                color: iconColor ?? Theme.of(context).colorScheme.secondary,
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                ),
-              ),
-            ],
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: valueColor ?? Theme.of(context).textTheme.bodyLarge?.color,
-            ),
-          ),
-        ],
-      ),
-    );
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = twoDigits(duration.inHours.remainder(24));
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$hours:$minutes:$seconds';
   }
 
   Future<void> _logout() async {
@@ -1526,5 +1997,72 @@ class _HomeScreenState extends State<HomeScreen> {
       return iosInfo.name;
     }
     return "Unknown Device";
+  }
+
+  Widget _buildStatItem(
+    BuildContext context,
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 16),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
