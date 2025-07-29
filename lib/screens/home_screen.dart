@@ -53,6 +53,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   DateTime? _connectionTime;
 
+
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +67,39 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     });
 
-    _selectedConfig = _v2rayService.currentConfig ?? widget.configs.firstOrNull;
+    // Load selected server from SharedPreferences
+    SharedPreferences.getInstance().then((prefs) async {
+      final savedId = prefs.getString('selected_server_id');
+      
+      if (savedId != null) {
+        try {
+          final selectedConfig = widget.configs.firstWhere(
+            (config) => config.id == savedId,
+          );
+          setState(() {
+            _selectedConfig = selectedConfig;
+          });
+          await _v2rayService.connect(selectedConfig);
+        } catch (e) {
+          print('Error finding saved server: $e');
+          final firstConfig = widget.configs.firstOrNull;
+          setState(() {
+            _selectedConfig = firstConfig;
+          });
+          if (firstConfig != null) {
+            await _v2rayService.connect(firstConfig);
+          }
+        }
+      } else {
+        final firstConfig = widget.configs.firstOrNull;
+        setState(() {
+          _selectedConfig = firstConfig;
+        });
+        if (firstConfig != null) {
+          await _v2rayService.connect(firstConfig);
+        }
+      }
+    });
 
     _statusSubscription = _v2rayService.statusStream.listen((status) {
       setState(() {
@@ -808,6 +842,11 @@ class _HomeScreenState extends State<HomeScreen> {
               });
               widget.configs.clear();
               widget.configs.addAll(updatedConfigs);
+
+              // Save selected server ID to SharedPreferences
+              SharedPreferences.getInstance().then((prefs) {
+                prefs.setString('selected_server_id', selected.id);
+              });
             }
           } else {
             ScaffoldMessenger.of(context).showSnackBar(

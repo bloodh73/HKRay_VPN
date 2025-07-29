@@ -57,7 +57,7 @@ class _MyAppState extends State<MyApp> {
               primaryColor: const Color(0xFF4A90E2),
               colorScheme: ColorScheme.fromSwatch().copyWith(
                 primary: const Color(0xFF4A90E2),
-                secondary: const Color(0xFF50E3C2),
+                secondary: const Color.fromARGB(255, 80, 188, 227),
                 surface: const Color(0xFFF0F2F5),
                 background: const Color(0xFFE0E5EC),
                 onPrimary: Colors.white,

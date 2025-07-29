@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:loading_indicator/loading_indicator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../models/v2ray_config.dart';
 import '../services/v2ray_service.dart';
-import 'dart:async';
 
 class ServerListScreen extends StatefulWidget {
   final List<V2RayConfig> configs;
@@ -32,8 +32,52 @@ class _ServerListScreenState extends State<ServerListScreen> {
     _selectedConfig = widget.currentSelectedConfig;
     _configs = List.from(widget.configs);
 
+    // Load saved ping values
+    _loadSavedPings();
+
+    // Load saved selected server
+    _loadSelectedServer();
+
     for (var config in _configs) {
       _serverPings[config.id] = 0;
+    }
+  }
+
+  void _loadSavedPings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedPings = prefs.getString('server_pings');
+    if (savedPings != null) {
+      final Map<String, int?> parsedPings = Map.from(
+        json.decode(savedPings) as Map<String, dynamic>,
+      ).map((key, value) => MapEntry(key, value as int?));
+      setState(() {
+        _serverPings.addAll(parsedPings);
+      });
+    }
+  }
+
+  void _savePings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('server_pings', json.encode(_serverPings));
+  }
+
+  void _loadSelectedServer() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedId = prefs.getString('selected_server_id');
+    if (savedId != null) {
+      final selectedConfig = _configs.firstWhere(
+        (config) => config.id == savedId,
+        orElse: () => _configs.first,
+      );
+      setState(() {
+        _selectedConfig = selectedConfig;
+      });
+    } else if (_configs.isNotEmpty) {
+      setState(() {
+        _selectedConfig = _configs.first;
+        // Save the first server as default
+        prefs.setString('selected_server_id', _configs.first.id);
+      });
     }
   }
 
@@ -49,11 +93,17 @@ class _ServerListScreenState extends State<ServerListScreen> {
       final v2rayService = Provider.of<V2RayService>(context, listen: false);
       final int pingResult = await v2rayService.getRealPing(config);
       if (mounted) {
-        setState(() => _serverPings[config.id] = pingResult);
+        setState(() {
+          _serverPings[config.id] = pingResult;
+          _savePings(); // Save ping result immediately
+        });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _serverPings[config.id] = -1);
+        setState(() {
+          _serverPings[config.id] = -1;
+          _savePings(); // Save error state
+        });
       }
     } finally {
       if (mounted) {
@@ -63,8 +113,6 @@ class _ServerListScreenState extends State<ServerListScreen> {
   }
 
   Future<void> _pingAndSortServers() async {
-    setState(() => _isSortingAndPinging = true);
-
     final List<Future<void>> pingFutures = [];
     for (var config in _configs) {
       pingFutures.add(_realPingServer(config));
@@ -89,7 +137,7 @@ class _ServerListScreenState extends State<ServerListScreen> {
       }
     });
 
-    setState(() => _isSortingAndPinging = false);
+    setState(() {});
   }
 
   String _getPingText(int? ping) {
@@ -160,34 +208,24 @@ class _ServerListScreenState extends State<ServerListScreen> {
                   child: SizedBox(
                     height: MediaQuery.of(context).size.height * 0.07,
                     width: MediaQuery.of(context).size.height,
-                    child: ElevatedButton.icon(
-                      onPressed: _isSortingAndPinging
-                          ? null
-                          : _pingAndSortServers,
-                      icon: const Icon(Icons.sort, size: 24),
-                      label: Text(
-                        _isSortingAndPinging
-                            ? 'در حال تست و مرتب‌سازی...'
-                            : 'تست و مرتب‌سازی سرورها',
-                        // FIX: Resolve the MaterialStateProperty<TextStyle?> to TextStyle?
-                        style: Theme.of(context)
-                            .elevatedButtonTheme
-                            .style
-                            ?.textStyle
-                            ?.resolve(WidgetState.values.toSet()),
-                      ),
+                    child: ElevatedButton(
+                      onPressed: _pingAndSortServers,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
-                        backgroundColor: Theme.of(context)
-                            .colorScheme
-                            .secondary, // Using secondary for sort button
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.secondary,
                         foregroundColor: Theme.of(
                           context,
                         ).colorScheme.onSecondary,
                         elevation: 5,
+                      ),
+                      child: Text(
+                        'تست و مرتب‌سازی سرورها',
+                        style: Theme.of(context).textTheme.labelLarge,
                       ),
                     ),
                   ),
@@ -312,7 +350,15 @@ class _ServerListScreenState extends State<ServerListScreen> {
                                           ),
                                         ),
                                 ),
-                                onTap: () {
+                                onTap: () async {
+                                  // Save selected server ID to SharedPreferences
+                                  final prefs =
+                                      await SharedPreferences.getInstance();
+                                  await prefs.setString(
+                                    'selected_server_id',
+                                    config.id,
+                                  );
+
                                   Navigator.pop(context, config);
                                 },
                               ),
@@ -358,12 +404,11 @@ class _ServerListScreenState extends State<ServerListScreen> {
                                   ).colorScheme.primary.withOpacity(0.1),
                                   shape: BoxShape.circle,
                                 ),
-                                child: LoadingIndicator(
-                                  indicatorType: Indicator.ballPulse,
-                                  colors: [
-                                    Theme.of(context).colorScheme.primary,
-                                  ],
+                                child: CircularProgressIndicator(
                                   strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Theme.of(context).colorScheme.primary,
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: 20),
